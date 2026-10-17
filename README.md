@@ -67,9 +67,20 @@ dojo done               # 打勾，problems/0146-lru-cache/done
 | `dojo done` | 标记完成 |
 | `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求（调提示词时用） |
 | `dojo doctor` | 环境与网关自检 |
+| `dojo clean` | 清构建产物；带题号/`--all` 删除题目（进系统回收站） |
 | `dojo help` | 用法 |
 
 通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附上卡点；`--no-save` 不写入 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
+
+## 清理
+
+```bash
+dojo clean          # 删 tool/target、solutions/target、.dojo/last-test.log
+dojo clean 1        # 把这题的题面 / 解法 / 测试挪进系统回收站
+dojo clean --all    # 所有题都挪进系统回收站
+```
+
+构建产物随删随建，下一次 `dojo` 命令会自动重编工具 jar。题目文件不真删，走系统回收站（`mavis-trash` / `gio trash` / `trash-put`，本机有什么用什么），删错了从文件管理器里拖回来即可。
 
 ## 提示阶梯
 

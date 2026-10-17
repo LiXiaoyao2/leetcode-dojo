@@ -49,6 +49,7 @@ public final class Main {
             case "done", "d" -> done(rest);
             case "prompt", "p" -> prompt(rest);
             case "doctor" -> doctor();
+            case "clean", "c" -> clean(rest);
             default -> {
                 Ui.err("不认识的命令：" + command);
                 Ui.info("dojo help 看用法。");
@@ -69,6 +70,7 @@ public final class Main {
         boolean unordered;
         boolean noSave;
         boolean debug;
+        boolean all;
 
         static Args parse(List<String> tokens) {
             Args args = new Args();
@@ -81,6 +83,7 @@ public final class Main {
                     case "--unordered" -> args.unordered = true;
                     case "--no-save" -> args.noSave = true;
                     case "--debug" -> args.debug = true;
+                    case "--all" -> args.all = true;
                     case "--problem", "-p" -> {
                         if (i + 1 >= tokens.size()) {
                             throw new DojoException("--problem 后面要跟题号或 slug。");
@@ -132,6 +135,7 @@ public final class Main {
                   dojo done                 把这题标记为完成
                   dojo prompt [1-5]         只打印提示词，不发请求（调试用）
                   dojo doctor               检查配置、网关和 Java/Maven
+                  dojo clean                清构建产物；带题号删这道题（进系统回收站）
 
                 选项
                   -p, --problem <id>        指定题目（默认按当前目录推断）
@@ -142,6 +146,11 @@ public final class Main {
                       --unordered           答案与顺序无关时，按排序后比较
                       --no-save             这次提示不写进 hints.md
                       --debug               打印完整请求（hint）与异常堆栈
+
+                清理
+                  dojo clean                删 target/ 与 .dojo/last-test.log
+                  dojo clean <题>           把这题的题面/解法/测试挪进系统回收站
+                  dojo clean --all          所有题都挪进系统回收站
 
                 五档提示
                   L1 澄清    只问问题，不给方向          L2 方向    点名套路和适用原因
@@ -412,6 +421,52 @@ public final class Main {
         Ui.line();
         System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note));
         return 0;
+    }
+
+    private static int clean(Args args) {
+        Repo repo = Repo.open();
+        String target = args.one("clean");
+        if (args.all && target != null) {
+            throw new DojoException("--all 不接受题号：要么 `dojo clean --all`，要么 `dojo clean <题>`。");
+        }
+        if (args.all) {
+            List<String> ids = repo.problemIds();
+            if (ids.isEmpty()) {
+                Ui.info("还没有题目，不用清。");
+                return 0;
+            }
+            List<Path> moved = Clean.trash(repo, ids);
+            Ui.ok("已移入系统回收站：" + ids.size() + " 道题（" + moved.size() + " 个路径）");
+            reportMoved(repo, moved);
+            return 0;
+        }
+        if (target != null) {
+            String id = repo.find(target).orElseThrow(
+                    () -> new DojoException("本地没有 " + target + "，没有可删的。"));
+            List<Path> moved = Clean.trash(repo, List.of(id));
+            Ui.ok("已移入系统回收站：" + id);
+            reportMoved(repo, moved);
+            return 0;
+        }
+
+        Clean.Freed freed = Clean.buildArtifacts(repo);
+        if (freed.paths().isEmpty()) {
+            Ui.info("没有可清的东西：target/ 和 .dojo/last-test.log 都不在。");
+            return 0;
+        }
+        Ui.ok("清理完成 · 释放 " + Clean.human(freed.bytes()));
+        for (Path path : freed.paths()) {
+            System.out.println("  " + repo.root().relativize(path));
+        }
+        Ui.info("工具 jar 若被删，下次运行 bin/dojo 会自动重编；题目和提示记录没动。");
+        return 0;
+    }
+
+    private static void reportMoved(Repo repo, List<Path> moved) {
+        for (Path path : moved) {
+            System.out.println("  " + repo.root().relativize(path));
+        }
+        Ui.info("删错了就在系统回收站里拖回来（文件管理器 → 回收站）。");
     }
 
     private static int doctor() {

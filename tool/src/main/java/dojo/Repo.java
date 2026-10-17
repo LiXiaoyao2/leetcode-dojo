@@ -30,6 +30,11 @@ public final class Repo {
         this.root = root;
     }
 
+    /** 只给测试用：直接指一个已经像仓库的目录，跳过向上查找。 */
+    static Repo at(Path root) {
+        return new Repo(root.toAbsolutePath().normalize());
+    }
+
     public static Repo open() {
         String env = System.getenv("DOJO_HOME");
         if (env != null && !env.isBlank()) {
