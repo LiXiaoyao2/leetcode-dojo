@@ -1,0 +1,10 @@
+{
+  "id": "0053-maximum-subarray",
+  "slug": "maximum-subarray",
+  "title": "53. 最大子数组和",
+  "difficulty": "中等",
+  "pkg": "p0053_maximum_subarray",
+  "testClass": "MaximumSubarrayTest",
+  "tags": ["数组", "分治", "动态规划"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

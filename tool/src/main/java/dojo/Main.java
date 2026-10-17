@@ -41,6 +41,18 @@ public final class Main {
 
     private static int run(String[] args) {
         String command = args.length == 0 ? "help" : args[0];
+        if (command.equals("eval")) {
+            String[] rest = Arrays.copyOfRange(args, 1, args.length);
+            if (Arrays.asList(rest).contains("--report")) {
+                return Eval.reportFromRaw(Repo.open());
+            }
+            for (int i = 0; i < rest.length - 1; i++) {
+                if (rest[i].equals("--noise")) {
+                    return Eval.noise(Repo.open(), Integer.parseInt(rest[i + 1]));
+                }
+            }
+            return Eval.run(rest);
+        }
         Args rest = Args.parse(Arrays.asList(args).subList(Math.min(1, args.length), args.length));
         return switch (command) {
             case "help", "-h", "--help" -> help();
@@ -139,6 +151,10 @@ public final class Main {
                   dojo prompt [1-5]         只打印提示词，不发请求（调试用）
                   dojo doctor               检查配置、网关和 Java/Maven
                   dojo clean                清构建产物；带题号删这道题（进系统回收站）
+                  dojo eval                 跑提示质量评测（开发用，见 eval/RESULTS.md）
+                  dojo eval --cases 3       先跑 3 题试水；--no-judge 只跑客观指标
+                  dojo eval --report        只重建报告，不调模型
+                  dojo eval --noise 5       判官重测同一答案，看主观分方差
 
                 选项
                   -p, --problem <id>        指定题目（默认按当前目录推断）
@@ -154,6 +170,11 @@ public final class Main {
                   dojo clean                删 target/ 与 .dojo/last-test.log
                   dojo clean <题>           把这题的题面/解法/测试挪进系统回收站
                   dojo clean --all          所有题都挪进系统回收站
+
+                评测（开发用）
+                  dojo eval --snapshot      按 eval/benchmark.txt 拉评测集
+                  dojo eval --cases 3       先跑 3 题试水，结果写到 eval/RESULTS.md
+                  dojo eval                跑全量：20 题 × 3 种架构 × 5 档
 
                 五档提示
                   L1 澄清    只问问题，不给方向          L2 方向    点名套路和适用原因

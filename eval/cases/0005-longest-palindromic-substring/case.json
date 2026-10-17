@@ -1,0 +1,10 @@
+{
+  "id": "0005-longest-palindromic-substring",
+  "slug": "longest-palindromic-substring",
+  "title": "5. 最长回文子串",
+  "difficulty": "中等",
+  "pkg": "p0005_longest_palindromic_substring",
+  "testClass": "LongestPalindromicSubstringTest",
+  "tags": ["双指针", "字符串", "动态规划", "Manacher 算法"],
+  "generatorNote": "已生成 2/2 个官方样例"
+}

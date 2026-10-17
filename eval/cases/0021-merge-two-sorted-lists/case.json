@@ -1,0 +1,10 @@
+{
+  "id": "0021-merge-two-sorted-lists",
+  "slug": "merge-two-sorted-lists",
+  "title": "21. 合并两个有序链表",
+  "difficulty": "简单",
+  "pkg": "p0021_merge_two_sorted_lists",
+  "testClass": "MergeTwoSortedListsTest",
+  "tags": ["递归", "链表"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

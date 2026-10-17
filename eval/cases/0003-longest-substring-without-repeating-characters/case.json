@@ -1,0 +1,10 @@
+{
+  "id": "0003-longest-substring-without-repeating-characters",
+  "slug": "longest-substring-without-repeating-characters",
+  "title": "3. 无重复字符的最长子串",
+  "difficulty": "中等",
+  "pkg": "p0003_longest_substring_without_repeating_characters",
+  "testClass": "LongestSubstringWithoutRepeatingCharactersTest",
+  "tags": ["哈希表", "字符串", "滑动窗口"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

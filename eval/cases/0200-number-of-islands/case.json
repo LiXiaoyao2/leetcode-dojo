@@ -1,0 +1,10 @@
+{
+  "id": "0200-number-of-islands",
+  "slug": "number-of-islands",
+  "title": "200. 岛屿数量",
+  "difficulty": "中等",
+  "pkg": "p0200_number_of_islands",
+  "testClass": "NumberOfIslandsTest",
+  "tags": ["深度优先搜索", "广度优先搜索", "并查集", "数组", "矩阵"],
+  "generatorNote": "已生成 2/2 个官方样例"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "0098-validate-binary-search-tree",
+  "slug": "validate-binary-search-tree",
+  "title": "98. 验证二叉搜索树",
+  "difficulty": "中等",
+  "pkg": "p0098_validate_binary_search_tree",
+  "testClass": "ValidateBinarySearchTreeTest",
+  "tags": ["树", "深度优先搜索", "二叉搜索树", "二叉树"],
+  "generatorNote": "已生成 2/2 个官方样例"
+}

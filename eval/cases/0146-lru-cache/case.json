@@ -1,0 +1,10 @@
+{
+  "id": "0146-lru-cache",
+  "slug": "lru-cache",
+  "title": "146. LRU 缓存",
+  "difficulty": "中等",
+  "pkg": "p0146_lru_cache",
+  "testClass": "LruCacheTest",
+  "tags": ["设计", "哈希表", "链表", "双向链表"],
+  "generatorNote": "已按操作序列生成 9 步调用的官方样例"
+}

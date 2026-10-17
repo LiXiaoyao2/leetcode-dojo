@@ -1,0 +1,10 @@
+{
+  "id": "0015-3sum",
+  "slug": "3sum",
+  "title": "15. 三数之和",
+  "difficulty": "中等",
+  "pkg": "p0015_3sum",
+  "testClass": "P3sumTest",
+  "tags": ["数组", "双指针", "排序"],
+  "generatorNote": "已生成 3/3 个官方样例（题面说顺序无关，按无序比较）"
+}

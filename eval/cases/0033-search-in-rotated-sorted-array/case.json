@@ -1,0 +1,10 @@
+{
+  "id": "0033-search-in-rotated-sorted-array",
+  "slug": "search-in-rotated-sorted-array",
+  "title": "33. 搜索旋转排序数组",
+  "difficulty": "中等",
+  "pkg": "p0033_search_in_rotated_sorted_array",
+  "testClass": "SearchInRotatedSortedArrayTest",
+  "tags": ["数组", "二分查找"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

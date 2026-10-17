@@ -1,0 +1,10 @@
+{
+  "id": "0102-binary-tree-level-order-traversal",
+  "slug": "binary-tree-level-order-traversal",
+  "title": "102. 二叉树的层序遍历",
+  "difficulty": "中等",
+  "pkg": "p0102_binary_tree_level_order_traversal",
+  "testClass": "BinaryTreeLevelOrderTraversalTest",
+  "tags": ["树", "广度优先搜索", "二叉树"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

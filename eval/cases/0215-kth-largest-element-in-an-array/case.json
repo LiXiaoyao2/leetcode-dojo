@@ -1,0 +1,10 @@
+{
+  "id": "0215-kth-largest-element-in-an-array",
+  "slug": "kth-largest-element-in-an-array",
+  "title": "215. 数组中的第K个最大元素",
+  "difficulty": "中等",
+  "pkg": "p0215_kth_largest_element_in_an_array",
+  "testClass": "KthLargestElementInAnArrayTest",
+  "tags": ["数组", "分治", "快速选择", "排序", "堆（优先队列）"],
+  "generatorNote": "已生成 2/2 个官方样例"
+}

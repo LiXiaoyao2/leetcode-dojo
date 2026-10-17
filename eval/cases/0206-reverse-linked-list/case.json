@@ -1,0 +1,10 @@
+{
+  "id": "0206-reverse-linked-list",
+  "slug": "reverse-linked-list",
+  "title": "206. 反转链表",
+  "difficulty": "简单",
+  "pkg": "p0206_reverse_linked_list",
+  "testClass": "ReverseLinkedListTest",
+  "tags": ["递归", "链表"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

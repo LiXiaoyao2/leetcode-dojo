@@ -50,7 +50,7 @@ public final class Ladder {
     }
 
     public record HintResult(Level level, String text, boolean leak, boolean truncated, long millis,
-                             String model) {
+                             int inputTokens, int outputTokens, String model) {
     }
 
     public static final String SYSTEM = """
@@ -168,7 +168,8 @@ public final class Ladder {
             }
         }
 
-        return new HintResult(level, reply.text(), leak, reply.truncated(), reply.millis(), ai.model());
+        return new HintResult(level, reply.text(), leak, reply.truncated(), reply.millis(),
+                reply.inputTokens(), reply.outputTokens(), ai.model());
     }
 
     private Ai.Reply retry(String user, int budget) {

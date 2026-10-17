@@ -1,0 +1,10 @@
+{
+  "id": "0002-add-two-numbers",
+  "slug": "add-two-numbers",
+  "title": "2. 两数相加",
+  "difficulty": "中等",
+  "pkg": "p0002_add_two_numbers",
+  "testClass": "AddTwoNumbersTest",
+  "tags": ["递归", "链表", "数学"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

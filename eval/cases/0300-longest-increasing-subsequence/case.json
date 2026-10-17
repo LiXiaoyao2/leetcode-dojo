@@ -1,0 +1,10 @@
+{
+  "id": "0300-longest-increasing-subsequence",
+  "slug": "longest-increasing-subsequence",
+  "title": "300. 最长递增子序列",
+  "difficulty": "中等",
+  "pkg": "p0300_longest_increasing_subsequence",
+  "testClass": "LongestIncreasingSubsequenceTest",
+  "tags": ["数组", "二分查找", "动态规划", "最长上升子序列"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}

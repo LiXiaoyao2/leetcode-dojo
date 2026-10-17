@@ -9,7 +9,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 [![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
-[![Tests](https://img.shields.io/badge/tests-57%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Tests](https://img.shields.io/badge/tests-75%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -57,6 +57,7 @@ $ dojo hint 5
 - [60 秒上手](#60-秒上手)
 - [命令](#命令)
 - [官方样例是怎么变成 JUnit 的](#官方样例是怎么变成-junit-的)
+- [评测：提示真的更好吗](#评测提示真的更好吗)
 - [架构](#架构)
 - [配置](#配置)
 - [设计取舍：刻意不做的事](#设计取舍刻意不做的事)
@@ -186,6 +187,7 @@ dojo done      # 打勾：problems/0001-two-sum/done
 | `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求 |
 | `dojo doctor` | 环境、PATH、配置来源、网关 ping |
 | `dojo clean` | 清构建产物；带题号 / `--all` 把题目移进系统回收站 |
+| `dojo eval` | 开发用：跑提示质量评测（20 题 × 3 架构 × 5 档） |
 | `dojo help` | 用法 |
 
 通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附卡点；`--no-save` 不写 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
@@ -207,6 +209,35 @@ dojo done      # 打勾：problems/0001-two-sum/done
 - 单例转不动就跳过这一例并注释原因；全都转不动就跳过整个文件并打印原因
 
 生成完立刻 `mvn test-compile` 校验：测试自己编不过 → 移出模块；解法编不过 → 保留测试并提示先修解法；挡编译的是**别的题** → 点名 + 给 `dojo clean <题号>`。
+
+## 评测：提示真的更好吗
+
+「感觉提示还行」不算证据。仓库里有 `eval/`，跑同一道题、同一段卡住代码、同一份真实失败输出，
+对比三种架构：**现在这套阶梯**、**朴素单次调用**、**先诊断再引导**（旧项目那套）。
+
+| 看什么 | 怎么算 |
+| --- | --- |
+| 泄底率 | L1–L4 里出现可编译 Java 的比例 |
+| 重复率 | 和更早档位字符 3-gram 相似度 ≥ 0.35 |
+| 超长率 | 超过该档字数上限 20% |
+| L5 跑绿 | 把第 5 档给的 Java 抠出来，跑同一份官方样例测试 |
+| 人工/判官分 | 逐档 1–5 分，判官看不到架构名 |
+
+第一轮结果（20 题 × 3 架构，2026-10）：
+
+- **篇幅纪律**：超长率 阶梯 **16%**、朴素单次 77%、两次调用 68%——阶梯把「一开口就写小作文」按住了。
+- **成本**：阶梯 6590 tokens/题、9.6 s；两次调用 10380、16.3 s（多 58% tokens、慢 70%）。
+- **泄底与 L5**：三套都是泄底 0%、L5 跑绿 20/20——这两项已经到天花板，区分不出来。
+- **主观分**：4.29 / 4.27 / 4.15；判官对同一答案重测就能差 2 分，这点差距不算结论。
+
+诚实的说法：在「每档要求已经写清楚」的前提下，单次调用已经很强；阶梯赢在篇幅和「不会越档」。
+完整表在 [`eval/RESULTS.md`](eval/RESULTS.md)，方法、坑与局限在 [`eval/README.md`](eval/README.md)，
+原始数据 [`eval/raw.json`](eval/raw.json)。想自己复现：
+
+```bash
+bin/dojo eval --cases 3   # 3 题试水
+bin/dojo eval             # 全量
+```
 
 ## 架构
 
@@ -278,6 +309,9 @@ L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然�
 **能同时开几道题？**
 能。题面、解法、提示互不干扰；唯一耦合是共享一个 Maven 模块，所以别把编译不过的文件留在里面——`new` 生成的空方法体是 `throw new UnsupportedOperationException("TODO: 还没写")`，保证没动笔时模块也是绿的。
 
+**你怎么知道提示是好的？**
+`dojo eval` 会跑 20 题 × 3 架构 × 5 档，客观指标（泄底/重复/超长/L5 能不能跑绿）加判官逐档评分，结果在 `eval/RESULTS.md`。判官也是模型，所以主表以客观指标为准。
+
 **想换模型？**
 改 `model=` 一行，`dojo doctor` 确认 ping 通即可。推理型模型在 L5 上偶尔会接近 180 秒，必要时调 `DOJO_TIMEOUT_SEC`。
 
@@ -291,6 +325,7 @@ L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然�
 - 一道题编译不过会挡住整个模块的 `dojo test`；报错会点出是哪道题，并给出 `dojo clean <题号>`。
 - 生成器按常见签名写，遇到 `Node` 形状的入参、`ListNode[]`、多返回值会跳过而不是猜。
 - 提示质量取决于网关背后的模型；同一个 `SYSTEM`，不同模型的「教练感」差别很大。
+- 评测集只有 20 题、每档一次采样，只看趋势；判官与被测模型同源时可能偏爱同一种文风。
 
 <div align="center">
 

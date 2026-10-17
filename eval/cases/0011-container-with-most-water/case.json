@@ -1,0 +1,10 @@
+{
+  "id": "0011-container-with-most-water",
+  "slug": "container-with-most-water",
+  "title": "11. 盛最多水的容器",
+  "difficulty": "中等",
+  "pkg": "p0011_container_with_most_water",
+  "testClass": "ContainerWithMostWaterTest",
+  "tags": ["贪心", "数组", "双指针"],
+  "generatorNote": "已生成 2/2 个官方样例"
+}

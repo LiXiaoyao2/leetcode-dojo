@@ -1,0 +1,10 @@
+{
+  "id": "0019-remove-nth-node-from-end-of-list",
+  "slug": "remove-nth-node-from-end-of-list",
+  "title": "19. 删除链表的倒数第 N 个结点",
+  "difficulty": "中等",
+  "pkg": "p0019_remove_nth_node_from_end_of_list",
+  "testClass": "RemoveNthNodeFromEndOfListTest",
+  "tags": ["链表", "双指针"],
+  "generatorNote": "已生成 3/3 个官方样例"
+}
