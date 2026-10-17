@@ -2,7 +2,15 @@
 # dojo 启动器：工具源码有改动时自动重编译，然后把参数原样交给 jar。
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 解析符号链接：用户通常把 bin/dojo 软链到 ~/.local/bin，$0 就不在仓库里了。
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  LINK_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$LINK_DIR/$SOURCE"
+done
+BIN_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+DIR="$(cd "$BIN_DIR/.." && pwd)"
 export DOJO_HOME="$DIR"
 
 JAR="$DIR/tool/target/dojo.jar"

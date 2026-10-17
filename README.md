@@ -34,11 +34,11 @@ dojo done           # 过了：打勾
 
 ```bash
 git clone <这个仓库> ~/code/leetcode-dojo
-ln -s ~/code/leetcode-dojo/bin/dojo ~/.local/bin/dojo   # 或者把 bin/ 加进 PATH
+ln -s ~/code/leetcode-dojo/bin/dojo ~/.local/bin/dojo   # 软链到 PATH 里；或者把 bin/ 加进 PATH
 dojo doctor                                             # 自检：java / mvn / 配置 / 一次 ping
 ```
 
-`bin/dojo` 会自己找仓库根目录（`DOJO_HOME`，或从当前目录往上找），所以你在 `solutions/...` 里也能直接敲 `dojo test`。
+`bin/dojo` 会先解析自己的符号链接，再找仓库根目录（`DOJO_HOME`，或从当前目录往上找），所以软链进 `~/.local/bin` 之后，在 `solutions/...`、`/tmp` 任何地方都能直接敲 `dojo`。
 
 ## 日常循环
 
@@ -173,6 +173,9 @@ tool/              命令行工具本身（单个可执行 jar，零运行时依
 4. 测试可以从 IDEA 里点，也可以 `dojo test`——后者会把失败输出留给下一次提示。
 
 ## FAQ
+
+**`dojo: 找不到命令`？**
+说明 `bin/dojo` 没在 `PATH` 上。`dojo doctor`（用 `bin/dojo doctor` 跑）会检查这一项并打印该敲的 `ln -s` 命令；软链建好后如果提示 `pom.xml 不存在`，那是旧版启动器没解析符号链接，更新仓库即可。
 
 **提示会不会直接把答案说了？**
 L1–L4 明确禁止出现可编译的 Java，模型越界会被重问一次；仍然越界就把原文给你并标警示。想要答案就直接 `dojo hint 5`。

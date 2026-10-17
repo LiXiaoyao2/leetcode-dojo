@@ -590,11 +590,45 @@ public final class Main {
         Ui.info("删错了就在系统回收站里拖回来（文件管理器 → 回收站）。");
     }
 
+    /** 在 PATH 里找可执行的 dojo；找不到返回 null。 */
+    private static String dojoOnPath() {
+        String path = System.getenv("PATH");
+        if (path == null) {
+            return null;
+        }
+        for (String dir : path.split(java.io.File.pathSeparator)) {
+            if (dir.isBlank()) {
+                continue;
+            }
+            java.nio.file.Path candidate = java.nio.file.Path.of(dir, "dojo");
+            if (java.nio.file.Files.isExecutable(candidate)) {
+                return candidate.toString();
+            }
+        }
+        return null;
+    }
+
+    private static boolean pointsHere(String onPath, Repo repo) {
+        try {
+            return java.nio.file.Path.of(onPath).toRealPath()
+                    .equals(repo.root().resolve("bin/dojo").toRealPath());
+        } catch (java.io.IOException e) {
+            return false;
+        }
+    }
+
     private static int doctor() {
         Repo repo = Repo.open();
         System.out.println("java    " + System.getProperty("java.version") + "  (" + System.getProperty("java.vendor") + ")");
         System.out.println("mvn     " + mvnVersion());
         System.out.println("仓库    " + repo.root());
+        String onPath = dojoOnPath();
+        if (onPath == null) {
+            System.out.println("dojo    不在 PATH 上——在别的目录里敲 dojo 会找不到命令");
+            Ui.info("挂上：ln -s " + repo.root().resolve("bin/dojo") + " ~/.local/bin/dojo");
+        } else {
+            System.out.println("dojo    " + onPath + (pointsHere(onPath, repo) ? "（指向本仓库）" : "（不是本仓库的 bin/dojo）"));
+        }
         System.out.println();
         System.out.println("配置来源（按优先级，取第一个有 base URL 的）");
         for (String line : Config.sourcesForDoctor(repo)) {
