@@ -51,6 +51,11 @@ public final class Clean {
                 .toList();
     }
 
+    /** 指定文件直接挪进系统回收站（用于清掉编译不过的生成测试）。 */
+    public static void trashFiles(List<Path> paths) {
+        trashPaths(paths);
+    }
+
     /** 若干道题的文件，一次挪进系统回收站。返回挪走的路径。 */
     public static List<Path> trash(Repo repo, List<String> ids) {
         List<Path> paths = new ArrayList<>();
@@ -66,9 +71,10 @@ public final class Clean {
 
     /** 走系统回收站：优先 mavis-trash，其次 gio，再其次 trash-put。 */
     static void trashPaths(List<Path> paths) {
+        List<Path> unique = new ArrayList<>(new java.util.LinkedHashSet<>(paths));
         List<String> command = trashCommand();
         List<String> argv = new ArrayList<>(command);
-        for (Path path : paths) {
+        for (Path path : unique) {
             argv.add(path.toString());
         }
         ProcessBuilder builder = new ProcessBuilder(argv).redirectErrorStream(true);
@@ -76,7 +82,9 @@ public final class Clean {
             Process process = builder.start();
             String output = new String(process.getInputStream().readAllBytes()).strip();
             int exit = process.waitFor();
-            if (exit != 0) {
+            // mavis-trash 偶尔搬完还退 1（对重复/已消失的路径报错），以最终结果为准。
+            boolean allGone = unique.stream().noneMatch(Files::exists);
+            if (exit != 0 && !allGone) {
                 throw new DojoException("移入回收站失败（" + command.get(0) + " 退出码 " + exit + "）"
                         + (output.isEmpty() ? "。" : "：" + output));
             }

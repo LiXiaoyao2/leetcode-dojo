@@ -277,4 +277,69 @@ class TestGenTest {
         assertNotNull(source);
         assertFalse(source.contains("normInts("), source);
     }
+
+    @Test
+    void refusesWhenSignatureHasMoreParametersThanMetadata() {
+        String meta = """
+                {"name":"hasCycle",
+                 "params":[{"name":"head","type":"ListNode"},{"name":"pos","type":"integer"}],
+                 "return":{"type":"boolean"}}
+                """;
+        String snippet = """
+                public class Solution {
+                    public boolean hasCycle(ListNode head) {
+                        return false;
+                    }
+                }
+                """;
+        String source = TestGen.generate(problemWithSnippet("141", "linked-list-cycle", meta, snippet),
+                "p0141_linked_list_cycle", "LinkedListCycleTest", false).source();
+        assertNull(source);
+    }
+
+    @Test
+    void refusesCustomTypeUnknownToTheGenerator() {
+        String meta = """
+                {"name":"connect","params":[{"name":"root","type":"TreeNode"}],
+                 "return":{"type":"TreeNode"}}
+                """;
+        String snippet = """
+                class Node {
+                    public int val;
+                }
+                public class Solution {
+                    public Node connect(Node root) {
+                        return root;
+                    }
+                }
+                """;
+        String generated = TestGen.generate(problemWithSnippet("116", "x", meta, snippet),
+                "p0116_x", "XTest", false).source();
+        assertNull(generated);
+    }
+
+    @Test
+    void acceptsSignatureThatMatchesMetadata() {
+        String meta = """
+                {"name":"twoSum","params":[{"name":"nums","type":"integer[]"},
+                 {"name":"target","type":"integer"}],"return":{"type":"integer[]"}}
+                """;
+        String snippet = """
+                class Solution {
+                    public int[] twoSum(int[] nums, int target) {
+                        return null;
+                    }
+                }
+                """;
+        Problem problem = new Problem("1", "two-sum", "两数之和", "Two Sum", "Easy",
+                "```\n输入：nums = [2,7,11,15], target = 9\n输出：[0,1]\n```\n```\n输入：nums = [3,2,4], target = 6\n输出：[1,2]\n```",
+                snippet, meta, "[\"[2,7,11,15]\\n9\",\"[3,2,4]\\n6\"]", java.util.List.of("数组"));
+        TestGen.Generated generated = TestGen.generate(problem, "p0001_two_sum", "TwoSumTest", false);
+        assertNotNull(generated.source(), generated.note());
+    }
+
+    private static Problem problemWithSnippet(String id, String slug, String meta, String snippet) {
+        return new Problem(id, slug, "t", "T", "Medium",
+                "```\n输入：1\n输出：1\n```", snippet, meta, "[\"1\"]", java.util.List.of());
+    }
 }

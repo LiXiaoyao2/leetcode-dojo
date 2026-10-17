@@ -68,7 +68,7 @@ public final class LeetCode {
         String contentHtml = firstNonBlank(
                 Json.strAt(question, "translatedContent"),
                 Json.strAt(question, "content"));
-        String snippet = javaSnippet(question);
+        String snippet = javaSnippet(question, slug);
         List<String> tags = new ArrayList<>();
         if (Json.at(question, "topicTags") instanceof List<?> tagNodes) {
             for (Object tag : tagNodes) {
@@ -139,25 +139,27 @@ public final class LeetCode {
         return number.strip().replaceFirst("^0+(?=\\d)", "");
     }
 
-    private static String javaSnippet(Object question) {
+    /**
+     * 只认 Java 模板。SQL / Shell 题如果把 SQL 当模板写进 Solution.java，
+     * 一个文件就让整个 solutions 模块编译不过——所有题都跑不了。
+     */
+    private static String javaSnippet(Object question, String slug) {
         if (!(Json.at(question, "codeSnippets") instanceof List<?> snippets)) {
-            return null;
+            throw new DojoException(slug + " 没有提供 Java 模板，dojo 只支持 Java 题。");
         }
-        String fallback = null;
+        List<String> languages = new ArrayList<>();
         for (Object node : snippets) {
             String langSlug = Json.strAt(node, "langSlug");
             String code = Json.strAt(node, "code");
-            if (code == null || code.isBlank()) {
-                continue;
+            if (langSlug != null) {
+                languages.add(langSlug);
             }
-            if ("java".equals(langSlug)) {
+            if ("java".equals(langSlug) && code != null && !code.isBlank()) {
                 return code;
             }
-            if (fallback == null) {
-                fallback = code;
-            }
         }
-        return fallback;
+        throw new DojoException(slug + " 只有 " + String.join(" / ", languages)
+                + " 模板，不是 Java 题。dojo 只支持 Java，这道题跳过。");
     }
 
     private static String firstNonBlank(String... values) {

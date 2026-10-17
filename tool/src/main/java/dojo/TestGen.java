@@ -89,6 +89,10 @@ public final class TestGen {
         }
         int outputIndex = intValue(Json.at(meta, "output", "paramindex"), -1);
         String type = normalize(returnType);
+        String signatureIssue = signatureIssue(problem.snippetJava(), method, params);
+        if (signatureIssue != null) {
+            throw new Unsupported(signatureIssue);
+        }
 
         List<String> cases = exampleCases(problem);
         if (cases.isEmpty()) {
@@ -821,6 +825,62 @@ public final class TestGen {
 
     private static int intValue(Object node, int fallback) {
         return node instanceof Number number ? number.intValue() : fallback;
+    }
+
+    /**
+     * 模板里的真实签名比 metaData 可靠。两者对不上就别生成——写出来的测试编译不过，
+     * 会把整个 solutions 模块拖住（第 141 题的 metaData 多一个 pos、第 133 题类型写错，
+     * 都是这么炸的）。
+     */
+    static String signatureIssue(String snippet, String method, List<Param> params) {
+        if (snippet == null || snippet.isBlank()) {
+            return null;
+        }
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(?m)^\\s*(?:public\\s+|private\\s+|protected\\s+|static\\s+|final\\s+|synchronized\\s+)*"
+                        + "([\\w.]+(?:<[^>]*>)?(?:\\[\\])*)\\s+"
+                        + java.util.regex.Pattern.quote(method) + "\\s*\\(([^)]*)\\)");
+        java.util.regex.Matcher matcher = pattern.matcher(snippet);
+        if (!matcher.find()) {
+            return null;
+        }
+        List<String> types = new ArrayList<>();
+        String raw = matcher.group(2).strip();
+        if (!raw.isEmpty()) {
+            for (String piece : splitTopLevel(raw)) {
+                String decl = piece.replaceAll("@\\w+(?:\\([^)]*\\))?", "").strip()
+                        .replaceFirst("^final\\s+", "");
+                int cut = decl.lastIndexOf(' ');
+                String type = cut > 0 ? decl.substring(0, cut).strip() : decl;
+                types.add(type.replace("...", "[]"));
+            }
+        }
+        if (types.size() != params.size()) {
+            return "模板签名是 " + types.size() + " 个参数（" + String.join(", ", types) + "），"
+                    + "metaData 却写了 " + params.size() + " 个——不硬凑，先手写测试";
+        }
+        for (String type : types) {
+            if (!isKnownJavaType(type)) {
+                return "模板签名里有生成器不认识的自定义类型 " + type + "（这类题先手写测试）";
+            }
+        }
+        return null;
+    }
+
+    /** Java 模板里出现的类型（int[]、List<Integer>、ListNode…），不是 metaData 的类型词表。 */
+    static boolean isKnownJavaType(String type) {
+        String t = type.replace("\s+", "");
+        if (t.endsWith("[]")) {
+            return isKnownJavaType(t.substring(0, t.length() - 2));
+        }
+        if (t.startsWith("List<") && t.endsWith(">")) {
+            return isKnownJavaType(t.substring(5, t.length() - 1));
+        }
+        return switch (t) {
+            case "int", "long", "double", "boolean", "char", "void", "String",
+                    "Integer", "Long", "Double", "Boolean", "Character", "ListNode", "TreeNode" -> true;
+            default -> false;
+        };
     }
 
     private static String normalize(String type) {

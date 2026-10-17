@@ -453,9 +453,34 @@ public final class Main {
             System.out.println();
             System.out.println(Mvn.summarize(result));
             System.out.println();
+            List<Path> removed = quarantineGeneratedTests(repo, result.output());
+            if (!removed.isEmpty()) {
+                Ui.warn("以上测试是生成器写的、编译不过，已移入回收站（要重生成：dojo new "
+                        + Naming.slug(id) + " --force）：");
+                for (Path path : removed) {
+                    System.out.println("  " + repo.root().relativize(path));
+                }
+                Mvn.Result retry = Mvn.test(repo.root(), testClass);
+                Mvn.saveLastTest(repo, id, testClass, retry);
+                if (!isCompileFailure(retry)) {
+                    Ui.info("清掉之后重跑：");
+                    return report(repo, id, retry);
+                }
+                result = retry;
+                Ui.err("清掉生成的测试后，编译仍然不过：");
+                System.out.println();
+                System.out.println(Mvn.summarize(retry));
+                System.out.println();
+            }
             Ui.info("先把编译错误清掉——断言还没开始跑。");
+            foreignCompileFailures(repo, id, result.output());
             return 1;
         }
+        return report(repo, id, result);
+    }
+
+    /** 跑完之后的统一出口：通过/失败 + 摘要 + 下一步。 */
+    private static int report(Repo repo, String id, Mvn.Result result) {
         if (result.ok()) {
             Ui.ok("通过 · " + oneLine(result.millis()));
         } else {
@@ -470,6 +495,35 @@ public final class Main {
             Ui.info("别急着改代码：`dojo hint` 会读这次失败输出。");
         }
         return result.ok() ? 0 : 1;
+    }
+
+    /**
+     * 生成器写的测试如果编译不过，留着只会让所有题都跑不了。识别办法：文件里带生成标记。
+     * 只清带标记的，手写的测试一个不碰。
+     */
+    private static List<Path> quarantineGeneratedTests(Repo repo, String output) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:^|\\s)(/[^\\s:]*?\\.java)(?=:\\[)").matcher(output);
+        List<Path> doomed = new ArrayList<>();
+        String generatedDir = repo.solutionsDir().resolve("src/test/java").toString() + java.io.File.separator;
+        while (matcher.find()) {
+            Path file = Path.of(matcher.group(1));
+            if (!file.startsWith(generatedDir) || !Files.isRegularFile(file)) {
+                continue;
+            }
+            try {
+                if (Files.readString(file, StandardCharsets.UTF_8).contains("// dojo 依据题目 metaData")) {
+                    doomed.add(file);
+                }
+            } catch (IOException ignored) {
+                // 读不了就当不是生成器写的
+            }
+        }
+        if (doomed.isEmpty()) {
+            return doomed;
+        }
+        Clean.trashFiles(doomed);
+        return doomed;
     }
 
     private static int status() {
@@ -663,6 +717,41 @@ public final class Main {
             Ui.err("ping 失败：" + e.getMessage());
             return 1;
         }
+    }
+
+    /**
+     * 一个编译不过的文件会把整个模块挡住。错误发生在别的题上时，明确说是谁挡的、
+     * 怎么清掉——否则用户会以为当前这道题坏了。
+     */
+    private static void foreignCompileFailures(Repo repo, String currentId, String output) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:^|\\s)/[^\\s:]*?\\.java(?=:\\[)").matcher(output);
+        java.util.LinkedHashMap<String, String> problems = new java.util.LinkedHashMap<>();
+        while (matcher.find()) {
+            String file = matcher.group().strip();
+            try {
+                String id = repo.pathToId(Path.of(file)).orElse(null);
+                if (id != null && !id.equals(currentId)) {
+                    problems.putIfAbsent(id, file);
+                }
+            } catch (RuntimeException ignored) {
+                // 路径不是本仓库的，忽略
+            }
+        }
+        if (problems.isEmpty()) {
+            return;
+        }
+        System.out.println();
+        Ui.warn("挡住编译的是别的题（清掉之后当前题才跑得起来）：");
+        int shown = 0;
+        for (String id : problems.keySet()) {
+            if (shown++ == 8) {
+                System.out.println("  … 共 " + problems.size() + " 道");
+                break;
+            }
+            System.out.println("  " + id + "   →  dojo clean " + Naming.number(id));
+        }
+        Ui.info("多半是 SQL / Shell 题：没有 Java 模板，留在 solutions 里只会挡住所有题。");
     }
 
     /** Maven 编译失败时 surefire 根本不会启动，不能把它当成「测试失败」来读。 */
