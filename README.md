@@ -1,124 +1,245 @@
+<div align="center">
+
 # dojo
 
-在 IDEA 里刷 LeetCode，卡住的时候给你**下一档**提示——不是答案，也不是鸡汤。
+**卡住的时候，给你下一档提示 —— 不是答案，也不是鸡汤。**
 
-```bash
-dojo new 1          # 拉题面 + 生成官方样例的 JUnit 测试 + 空解法
-# 在 IDEA 里写 solutions/src/main/java/p0001_two_sum/Solution.java
-dojo test           # 跑官方样例
-dojo hint           # 卡住了：要下一档提示
-dojo done           # 过了：打勾
+在 IDEA 里刷 LeetCode：题面、代码、测试、提示，都在一个 Maven 工程里。
+
+[![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
+[![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/tests-57%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+</div>
+
+---
+
+```
+$ dojo new 146
+→ 从 leetcode.cn 拉取 146. LRU 缓存 …
+  146  LRU 缓存  ·  中等  ·  设计 / 哈希表 / 链表 / 双向链表
+✓ 已就绪：0146-lru-cache
+  新建  problems/0146-lru-cache/problem.md
+  新建  solutions/src/main/java/p0146_lru_cache/Solution.java
+  新建  solutions/src/test/java/p0146_lru_cache/LRUCacheTest.java
+
+$ dojo test
+→ mvn test -Dtest=LRUCacheTest …
+✗ 没通过 · 0.8 s
+  LRUCacheTest.officialExample1:23 » 期望 [null, null, 1, null, -1]，实际 [null, null, -1, null, -1]
+
+$ dojo hint
+→ 请求 L1 · 澄清（deepseek-v4.1-flash）…
+
+L1 · 澄清
+
+你说 put(1, 1) 之后 get(1) 拿到了 -1。先别管淘汰策略——
+你的 put 是在 get 之前就动了链表，还是在之后？
+容量为 1 时，put 一个不存在的 key，中间会不会先发生一次淘汰？
+
+12.3 s · deepseek-v4.1-flash
+
+$ dojo hint 5
+→ 请求 L5 · 题解 …
+（完整 Java + 正确性 + 复杂度 + 一个变体）
 ```
 
-## 为什么是这么个东西
+## 目录
 
-之前的版本把力气花在了外围：网页、数据库、爬虫、星级、设置页。提示本身反而是「两次模型调用 + 纪律校验 + 不合格就换一段罐头文案」，卡住的人看到的经常是一段正确但没用的废话。
+- [为什么会有这个东西](#为什么会有这个东西)
+- [它和别的刷题插件有什么不一样](#它和别的刷题插件有什么不一样)
+- [五档阶梯](#五档阶梯)
+- [一次提示，模型到底看到了什么](#一次提示模型到底看到了什么)
+- [安装](#安装)
+- [60 秒上手](#60-秒上手)
+- [命令](#命令)
+- [官方样例是怎么变成 JUnit 的](#官方样例是怎么变成-junit-的)
+- [架构](#架构)
+- [配置](#配置)
+- [设计取舍：刻意不做的事](#设计取舍刻意不做的事)
+- [FAQ](#faq)
+- [已知限制](#已知限制)
 
-这一版只做一件事：**把提示做准**。
+## 为什么会有这个东西
 
-- **一次调用**。不再拆「诊断器 + 引导器」，模型同时看到题面、你磁盘上的真实代码（带行号）、最近一次测试输出、已经给过的提示，一次给出下一档。
-- **阶梯是真的阶梯**。L1 只问边界，L2 只点方向，L3 给一个洞察，L4 给步骤骨架，L5 才是完整题解。越级要显式说，比如 `dojo hint 5`。
-- **不重复**。已经给过的提示会原样进上下文，模型被要求「一句都不许重复，且必须承接上一档」。
-- **失败不装死**。模型越界给了代码、或者被长度截断，会重问一次；仍然不行就原文照发 + 一行警示，绝不偷偷换成罐头文案。
-- **测试必须能跑**。生成的测试若编译不过就删掉并说明原因，不让一个坏文件拖垮整个模块。
+上一版把力气花在了外围：Web 页面、数据库、爬虫、星级、分区 hash、设置页。提示本身反而是「两次模型调用 + 纪律校验 + 不合格就换一段罐头文案」——卡住的人拿到的经常是一段正确但没用的废话。
 
-## 需要什么
+这一版只有一条主线：**把提示做准。** 其余全部让路。
 
-- JDK 21（`java -version` 能看到 21）
-- Maven 3.9+（`mvn -v`）
-- 一个 Anthropic 或 OpenAI 兼容的模型网关（下面的「配置」）
+- **一次调用。** 模型同时看到题面、你磁盘上的真实代码（带行号）、最近一次测试输出、已经给过的提示，一次给出下一档。没有「诊断器 → 引导器」的二次转述损耗。
+- **阶梯是真的阶梯。** L1 只问边界，L2 只指方向，L3 给一个洞察，L4 给步骤骨架，L5 才是完整题解。想要答案就明说 `dojo hint 5`，但默认永远只推进一格。
+- **不重复。** 已给的提示原样进上下文，模型被要求「一句都不许重复，且必须承接上一档」。
+- **失败不装死。** 越界给了代码、或者被长度截断，会重问一次；仍然不行就原文照发 + 一行警示。**绝不**偷偷换成罐头文案。
+- **测试必须能跑。** 生成器自己保证「要么给一份能编译的测试，要么明确说为什么给不了」；坏文件会被移出模块，不会一道题拖垮所有题。
 
-不需要数据库、不需要账号、不需要常驻服务。`bin/dojo` 第一次运行会用 Maven 把工具编出来（几秒，之后走缓存）。
+## 它和别的刷题插件有什么不一样
+
+|  | 常见做法 | dojo |
+| --- | --- | --- |
+| 提示形态 | 一问一答，直接给思路或代码 | 五档阶梯，每次只给下一档，越级要显式要 |
+| 上下文 | 题面 + 你在网页里粘的代码 | 题面 + **磁盘上的真实文件**（带行号）+ 最近一次 JUnit 输出 |
+| 重复提问 | 每次重新生成，内容漂移 | 已给提示进上下文，禁止复述，必须承接 |
+| 失败处理 | 生成失败就报错/给模板话术 | 重问 → 照发 + 警示（保留真实信息） |
+| 写题环境 | 网页 / 插件面板 / 独立编辑器 | 你自己的 IDEA + 一个普通 Maven 模块 |
+| 数据 | 云端账号、数据库 | 纯文件：`problem.md`、`hints.md`、`done` |
+
+## 五档阶梯
+
+| 档 | 名字 | 给什么 | 不给什么 | 篇幅 |
+| :--: | --- | --- | --- | --- |
+| **L1** | 澄清 | 1–2 个能一句话回答的问题：边界、返回约定、你的代码与题面的偏差 | 任何方向暗示 | ≤120 字 |
+| **L2** | 方向 | 点名模式（双指针 / 单调栈 / 并查集…），解释它为什么适配这组输入的形状 | 具体步骤 | ≤150 字 |
+| **L3** | 洞察 | 打破僵局的那**一个**观察，可点名变量与行号 | 步骤清单 | ≤220 字 |
+| **L4** | 骨架 | 3–6 步 + 复杂度 + 最易错点；伪代码可以 | 可编译的 Java | ≤350 字 |
+| **L5** | 题解 | 完整 Java + 思路 + 正确性 + 复杂度 + 一个变体 | —— | 不限 |
+
+档位状态不存数据库：数 `problems/<id>/hints.md` 里有多少个 `## L3 · 洞察 · 2026-10-18 01:12` 小节，就知道你走到哪了。删掉最后一节就等于退回上一档，手改也认。
+
+> 规则全部写在 `tool/src/main/java/dojo/Ladder.java` 的 `SYSTEM` 里。想换教练的语气、篇幅、严格程度，改那一段，`dojo prompt 3` 立刻能看效果，不用重新编译整个工具。
+
+## 一次提示，模型到底看到了什么
+
+```
+【题目】            题面（去掉图片噪声，保留样例与约束，最多 9000 字符）
+【我当前的代码】     磁盘上的真实文件 + 行号（中间截断，保留头尾）
+【最近一次测试输出】  上一次 dojo test 的摘要（Maven 噪声已过滤）
+【已经给过的提示】    L1..Ln 原文（每条截断到 900 字符）
+【这一档】           L3 · 洞察 —— 该档的指令与禁令
+【我自己的卡点】      可选：dojo hint "我卡在边界处理"
+```
+
+外加一段 `SYSTEM`：中文、直给、无开场白、不复述题面、不灌鸡汤、禁止重复、引用行号必须与标注一致、测试全绿时把这一档用在更优解而不是让你重跑。
+
+**为什么要给你看这些？** 因为 `dojo prompt 3` 会把上面整段原样打印出来，不发请求。提示词不是黑盒，调它不需要读工具源码。
 
 ## 安装
 
+需要：**JDK 21**、**Maven 3.9+**、一个 Anthropic / OpenAI 兼容的模型网关。不需要数据库、账号或常驻服务。
+
 ```bash
-git clone <这个仓库> ~/code/leetcode-dojo
-ln -s ~/code/leetcode-dojo/bin/dojo ~/.local/bin/dojo   # 软链到 PATH 里；或者把 bin/ 加进 PATH
-dojo doctor                                             # 自检：java / mvn / 配置 / 一次 ping
+git clone https://github.com/LiXiaoyao2/leetcode-dojo.git ~/code/leetcode-dojo
+ln -sfn ~/code/leetcode-dojo/bin/dojo ~/.local/bin/dojo   # 或把 bin/ 加进 PATH
+dojo doctor                                               # java / mvn / PATH / 网关 ping
 ```
 
-`bin/dojo` 会先解析自己的符号链接，再找仓库根目录（`DOJO_HOME`，或从当前目录往上找），所以软链进 `~/.local/bin` 之后，在 `solutions/...`、`/tmp` 任何地方都能直接敲 `dojo`。
+`bin/dojo` 会先解析自己的符号链接，再定位仓库根（`DOJO_HOME`，或从当前目录往上找），最后按需用 Maven 把工具编成单个 jar（首次几秒，之后走缓存）。所以软链进 `~/.local/bin` 之后，在 `solutions/...` 或任意目录都能直接敲 `dojo`。
 
-## 日常循环
+`doctor` 的输出长这样：
 
 ```
-dojo new 146            # 或 dojo new lru-cache，或直接粘 leetcode.cn 的链接
-dojo new 1-100          # 想一次铺开一个区间也行
-        │
-        ├─ solutions/src/main/java/p0146_lru_cache/Solution.java   ← 在 IDEA 里写
-        │
-dojo test               # 官方样例；失败输出会留给下一次 hint
-        │
-dojo hint               # L1 → L2 → L3 → L4 → L5，每次只推进一格
-        │
-dojo done               # 打勾，problems/0146-lru-cache/done
+java    21.0.12.1  (Oracle Corporation)
+mvn     3.9.16
+仓库    /home/lin/code/leetcode-dojo
+dojo    /home/lin/.local/bin/dojo（指向本仓库）
+
+配置来源（按优先级，取第一个有 base URL 的）
+  · …（四个来源逐个列出，第一个有值的就是它）
+使用    ~/.claude/settings.json
+base    https://your-gateway.example.com/anthropic
+端点    https://your-gateway.example.com/anthropic/v1/messages
+模型    deepseek-v4.1-flash
+协议    anthropic
+token   …a1b2（115 位）
+
+→ ping …
+✓ ping 成功 · 1.8 s · OK
 ```
 
-`dojo status` 随时看战况：哪些题拿了哪几档提示、哪些已完成。
+## 60 秒上手
+
+```bash
+dojo new 1              # 也认 lru-cache、1、leetcode.cn 的完整链接
+dojo new 1-100          # 想一次铺开一个区间也行（最多 300 道）
+```
+
+生成三样东西：
+
+```
+problems/0001-two-sum/problem.md                         题面（含样例，可直接读）
+solutions/src/main/java/p0001_two_sum/Solution.java      空解法（方法体是 TODO throw，模块恒可编译）
+solutions/src/test/java/p0001_two_sum/TwoSumTest.java    官方样例的 JUnit 5 测试
+```
+
+然后在 IDEA 里只改一个文件，卡住时：
+
+```bash
+dojo test      # 跑官方样例；失败摘要会留给下一次 hint
+dojo hint      # L1 → L2 → L3 → L4 → L5，每次只推进一格
+dojo done      # 打勾：problems/0001-two-sum/done
+```
+
+`dojo status` 随时看战况：每道题拿了哪几档、哪些已完成。
 
 ## 命令
 
 | 命令 | 作用 |
 | --- | --- |
-| `dojo new <slug\|题号\|链接>` | 拉题面、生成 `Solution.java` 与官方样例测试 |
+| `dojo new <slug\|题号\|链接>` | 拉题面 + 解法模板 + 官方样例测试 |
 | `dojo new <a>-<b>` | 批量拉 `a` 到 `b`（含两端，一次最多 300 道） |
 | `dojo hint [1-5] [卡点]` | 要下一档提示；带数字=指定档位，带文字=把你的卡点一起告诉模型 |
-| `dojo test` | 跑这道题的 JUnit 测试，结果写进 `.dojo/last-test.log` |
+| `dojo test` | 跑这道题的 JUnit 测试，摘要写入 `.dojo/last-test.log` |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
 | `dojo done` | 标记完成 |
-| `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求（调提示词时用） |
-| `dojo doctor` | 环境与网关自检 |
-| `dojo clean` | 清构建产物；带题号/`--all` 删除题目（进系统回收站） |
+| `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求 |
+| `dojo doctor` | 环境、PATH、配置来源、网关 ping |
+| `dojo clean` | 清构建产物；带题号 / `--all` 把题目移进系统回收站 |
 | `dojo help` | 用法 |
 
-通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附上卡点；`--no-save` 不写入 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
+通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附卡点；`--no-save` 不写 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
 
-## 批量拉题
+**批量拉题**：逐题拉、间隔 150 ms、已存在跳过、单题失败不中断；全部写完后**统一**跑一次 `mvn test-compile`（而不是 100 次 Maven），编不过的生成测试精确删除并报题号。
+
+**清理**：`dojo clean` 删 `target/` 与 `last-test.log`；`dojo clean 146` 只把这一题的题面/解法/测试移进系统回收站（`mavis-trash` / `gio trash` / `trash-put`，本机有什么用什么），删错了从文件管理器拖回来即可。
+
+## 官方样例是怎么变成 JUnit 的
+
+`new` 时用题目的 `metaData` + `jsonExampleTestcases` 做**确定性**转换，不经过模型：
+
+- 类型覆盖 `integer`、`integer[]`、`integer[][]`、`string`、`string[]`、`string[][]`、`character`、`double`、`boolean`、`long`、`list<...>`、`ListNode`、`TreeNode`、`void`（断言被修改的入参）
+- 期望输出**按输入值配对**，不按序号：接口常常只保留 3 个用例而题面写了 5 个，硬对齐就会把错的期望值写进测试
+- 设计题按操作序列生成 `obj.method(...)`，`void` 操作只调用不断言
+- 题面写「顺序不重要 / 任意顺序」时自动按无序比较（`int[]` 排序、`List<List<...>>` 归一化），也可手动 `--unordered`
+- 模板里被注释掉的类型定义（克隆图的 `Node`、随机链表的 `Node`）会还原成真代码；`ListNode` / `TreeNode` 复用 `kit` 里的版本
+- **签名先对账**：模板签名与 `metaData` 参数个数不符、或出现生成器不认识的类型（`Node`、`ListNode[]`），直接不生成，并说明「这类题先手写测试」——宁可少一个测试文件，也不写一个编译不过的
+- 单例转不动就跳过这一例并注释原因；全都转不动就跳过整个文件并打印原因
+
+生成完立刻 `mvn test-compile` 校验：测试自己编不过 → 移出模块；解法编不过 → 保留测试并提示先修解法；挡编译的是**别的题** → 点名 + 给 `dojo clean <题号>`。
+
+## 架构
 
 ```
-dojo new 1-100      # 1 到 100，含两端；写 100-1 也认
+dojo（单 jar · Java 21 · 零运行时依赖）
+├── Main ── Naming / Repo / Ui（命令分发、题目定位、终端输出）
+├── new ─── LeetCode GraphQL → Problem → Scaffold → TestGen
+│                          └── Html → Markdown（题面里的公式/图片/代码块）
+├── hint ── Ladder → Ai → Http → 你的网关
+│             └── hints.md（档位就是历史，可手改）
+├── test ── Mvn → solutions 模块（JUnit 5）
+│             └── last-test.log（下一次 hint 的输入）
+└── clean ─ 系统回收站（题目）/ target（构建产物）
 ```
 
-- 逐题拉取，题与题之间停 150 ms；已经在本地的题直接跳过（加 `--force` 才覆盖）
-- 某道题失败（会员题、接口抽风）只记一笔，不中断整批；最后列出失败的题号，`dojo new <题号>` 单独重试
-- 批量时不逐题跑 Maven（100 次 `mvn` 太慢），全部写完统一 `mvn test-compile` 一次；哪个生成的测试编不过就删哪个，并报出题号
-- 一次最多 300 道，防止手滑把磁盘塞满；要更多就分段
-
-## 清理
-
-```bash
-dojo clean          # 删 tool/target、solutions/target、.dojo/last-test.log
-dojo clean 1        # 把这题的题面 / 解法 / 测试挪进系统回收站
-dojo clean --all    # 所有题都挪进系统回收站
+```
+tool/          命令行工具（17 个类，约 4.1k 行；57 个单元测试）
+solutions/     普通 Maven 模块：你的解法 + 生成的测试 + kit 工具类
+problems/      每题的题面 / 提示记录 / 完成标记（默认 gitignore）
 ```
 
-构建产物随删随建，下一次 `dojo` 命令会自动重编工具 jar。题目文件不真删，走系统回收站（`mavis-trash` / `gio trash` / `trash-put`，本机有什么用什么），删错了从文件管理器里拖回来即可。
-
-## 提示阶梯
-
-| 档 | 名字 | 给什么 | 篇幅 |
-| --- | --- | --- | --- |
-| L1 | 澄清 | 只问边界与题面偏差，1–2 个能一句话回答的问题 | ≤120 字 |
-| L2 | 方向 | 点名模式，解释为什么适配这组输入的形状 | ≤150 字 |
-| L3 | 洞察 | 打破僵局的那一个观察，可点名变量与行号 | ≤220 字 |
-| L4 | 骨架 | 3–6 步 + 复杂度 + 最易错点；伪代码可以，可编译 Java 不行 | ≤350 字 |
-| L5 | 题解 | 完整 Java + 思路 + 正确性 + 复杂度 + 一个变体 | 不限 |
-
-规则写在 `tool/src/main/java/dojo/Ladder.java` 的 `SYSTEM` 里。想改教练的性格、篇幅、口吻，改那一段，然后 `dojo prompt 3` 看效果。
-
-档位状态不存数据库，直接由 `problems/<id>/hints.md` 里的 `## L3 · 洞察 · 时间` 小节数推导——所以你可以手改这个文件，删掉最后一节就等于「退回上一档」。
+**为什么是 Maven？** 因为 `dojo test` 要跑的就是 JUnit，而 JUnit 需要一个能编译的工程。代价是首次拉依赖；`~/.m2` 有缓存时是秒级。收益是：IDEA 直接按 Maven 导入，测试能点绿箭头，`dojo test` 与 IDE 跑的是同一套东西。
 
 ## 配置
 
 按优先级取第一个有 base URL 的来源：
 
-1. 环境变量：`DOJO_BASE_URL`、`DOJO_API_KEY`（或 `DOJO_AUTH_TOKEN`）、`DOJO_MODEL`、`DOJO_PROVIDER`（`anthropic` / `openai`）
-2. 仓库内 `.dojo/config`（已 gitignore）
-3. `~/.config/dojo/config`
-4. `~/.claude/settings.json` 里的 `env` 块（复用 Claude Code 的 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / 模型名）
-
-配置文件是 `key=value`：
+| 优先级 | 位置 | 适合 |
+| :--: | --- | --- |
+| 1 | 环境变量 `DOJO_BASE_URL` / `DOJO_API_KEY`\|`DOJO_AUTH_TOKEN` / `DOJO_MODEL` / `DOJO_PROVIDER` | CI、临时切换 |
+| 2 | 仓库内 `.dojo/config`（已 gitignore） | 这一份仓库专用 |
+| 3 | `~/.config/dojo/config` | 全局默认 |
+| 4 | `~/.claude/settings.json` 的 `env` 块 | 已经配好 Claude Code，直接复用 |
 
 ```properties
 base_url=https://your-gateway.example.com/anthropic
@@ -127,79 +248,56 @@ model=deepseek-v4.1-flash
 provider=anthropic
 ```
 
-- `provider=anthropic` 走 `/v1/messages`，同时发 `x-api-key` 与 `Authorization: Bearer`；`provider=openai` 走 `/v1/chat/completions`。
-- base URL 以 `/messages` 或 `/v1` 结尾都能识别，不会拼出双 `/v1`。
-- 走代理时显式给 `DOJO_PROXY=http://127.0.0.1:7890`；不隐式读 `HTTPS_PROXY`，免得 `dojo doctor` 说通了、`dojo test` 却莫名超时。
+- `provider=anthropic` 走 `/v1/messages`（同时发 `x-api-key` 与 `Authorization: Bearer`）；`provider=openai` 走 `/v1/chat/completions`
+- base URL 以 `/v1` 或 `/messages` 结尾都能识别，不会拼出双 `/v1`
+- 走代理：显式 `DOJO_PROXY=http://127.0.0.1:7890`；不隐式读 `HTTPS_PROXY`，免得 `doctor` 说通了而 `test` 莫名超时
+- 超时：`DOJO_TIMEOUT_SEC`，默认 180 秒
 
-`dojo doctor` 会打印来源、端点、模型、掩码后的 token，并做一次最小 ping。
+## 设计取舍：刻意不做的事
 
-## 目录
-
-```
-problems/0001-two-sum/
-  problem.md       题面（含官方样例，可直接读）
-  hints.md         每次提示的原文，按档位追加
-  done             完成标记
-solutions/
-  src/main/java/kit/{ListNode,TreeNode,ListNodes,TreeNodes}.java   预置工具类，始终可编译
-  src/main/java/p0001_two_sum/Solution.java                        解法（类名沿用模板）
-  src/test/java/p0001_two_sum/TwoSumTest.java                      生成的官方样例测试
-tool/              命令行工具本身（单个可执行 jar，零运行时依赖）
-```
-
-`solutions` 是一个普通 Maven 模块，IDEA 直接按 Maven 项目导入即可；测试是 JUnit 5，点绿箭头也能跑。
-
-## 官方样例是怎么变成测试的
-
-`new` 时用题目的 `metaData` + `jsonExampleTestcases` 做**确定性**转换（不经过模型）：
-
-- 支持 `integer`、`integer[]`、`integer[][]`、`string`、`string[]`、`string[][]`、`character`、`double`、`boolean`、`long`、`list<...>`、`ListNode`、`TreeNode`、`void`（断言被修改的入参）
-- 期望输出不是「第 N 个用例配第 N 个输出」：接口常常只保留 3 个用例而题面写了 5 个（第 13 题就是），所以按**输入值**去题面示例里配对，配不上就跳过，绝不硬安一个错的期望值
-- 设计题按操作序列生成 `obj.method(...)`
-- 单例转不动就跳过这一例并注释原因；全都转不动就跳过整个文件并打印原因，不会写坏文件
-- 题面自己写「顺序不重要 / 任意顺序」时自动按无序比较（`int[]` 排序、`List<List<...>>` 归一化）；也可以手动 `--unordered`
-
-生成完会跑一次 `mvn test-compile` 校验：测试自己编译不过 → 删除并警告；解法编译不过 → 保留测试但提示先修解法。
-
-- 模板里被注释掉的类型定义（克隆图的 `Node`、随机链表的 `Node`）会被还原成真代码，保证 `Solution.java` 一生成就能编译；`ListNode` / `TreeNode` 用 `kit` 里的版本，不重复定义
-
-**没有覆盖到的**：`Node` 形状的入参、`ListNode[]` 这类很少见的签名，生成器会跳过并说明原因（克隆图的 `metaData` 本身就把参数描述错了，宁可跳过也不猜）。此时自己照 `problem.md` 写两行测试即可，工具不会因此挡住你。
-
-## 在 IDEA 里怎么用
-
-1. `idea ~/code/leetcode-dojo`，按 Maven 项目导入，Project SDK 选 21。
-2. 每道题只改一个文件：`solutions/src/main/java/pXXXX_xxx/Solution.java`。
-3. 卡住时在 IDEA 的终端里敲 `dojo hint`（不用切窗口，它会读你刚存的文件）。
-4. 测试可以从 IDEA 里点，也可以 `dojo test`——后者会把失败输出留给下一次提示。
+| 不做 | 为什么 |
+| --- | --- |
+| Web 页面 / 桌面面板 | 题面、代码、测试输出都在磁盘上，命令行是最近的路 |
+| 数据库 | `hints.md` + `done` 就是全部状态；纯文本可 grep、可手改、可 git |
+| 星级 / 打卡 / 排行榜 | 和「卡住时能不能往前走」无关 |
+| 内置题库镜像 | `new` 现拉，题面永远是最新的 |
+| Web 端提交判题 | IDEA 里的 JUnit 已经是更快、更细的反馈 |
+| 流式输出 | 提示本来就短；一次拿全，重试逻辑才简单 |
 
 ## FAQ
 
-**`dojo: 找不到命令`？**
-说明 `bin/dojo` 没在 `PATH` 上。`dojo doctor`（用 `bin/dojo doctor` 跑）会检查这一项并打印该敲的 `ln -s` 命令；软链建好后如果提示 `pom.xml 不存在`，那是旧版启动器没解析符号链接，更新仓库即可。
-
 **提示会不会直接把答案说了？**
-L1–L4 明确禁止出现可编译的 Java，模型越界会被重问一次；仍然越界就把原文给你并标警示。想要答案就直接 `dojo hint 5`。
+L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然越界就原文给你并标一行警示。想直接看答案就 `dojo hint 5`。
 
 **行号说错了怎么办？**
-请求里带的是文件真实行号，但模型偶尔会数错。`SYSTEM` 里已经要求「拿不准就别写行号」，仍出错就当它在说「那段代码」——重点是它指出的因果关系对不对。
+请求里带的是文件真实行号，但模型偶尔会数错。`SYSTEM` 已要求「拿不准就别写行号」；真错了就当它在说「那段代码」——重点是它指出的因果关系对不对。
 
 **生成的测试把自己搞崩了怎么办？**
-生成器写出来的测试带标记；`dojo test` 发现编译错误来自这些文件时，会把它们挪进系统回收站并自动重跑一次，不让一个坏文件挡住所有题。根因也在生成端收紧了：模板签名与 `metaData` 对不上（参数个数、`Node` 这类自定义类型）就直接不生成，提示你手写测试。`dojo new <题> --force` 可以重新生成。
-
-**为什么非要 Maven？**
-因为 `dojo test` 要跑的就是 JUnit，而 JUnit 需要一个能编译的工程。代价是第一次要拉依赖；`~/.m2` 里有缓存时是秒级。
+带标记的生成测试编译失败时，`dojo test` 会把它移进系统回收站并自动重跑一次。根因也在生成端收紧了：签名对不上就不生成，提示你手写。`dojo new <题> --force` 可重新生成。
 
 **能同时开几道题？**
-能。每道题的解法、测试、提示互不干扰；唯一的耦合是它们共享一个 Maven 模块，所以别把编译不过的文件留在里面（`new` 生成的空解法会塞一句 `throw new UnsupportedOperationException("TODO")`，保证你还没动笔时模块也是绿的）。
+能。题面、解法、提示互不干扰；唯一耦合是共享一个 Maven 模块，所以别把编译不过的文件留在里面——`new` 生成的空方法体是 `throw new UnsupportedOperationException("TODO: 还没写")`，保证没动笔时模块也是绿的。
 
-**为什么不做网页/数据库/星级？**
-那些东西不会让提示变好，只会让「卡住」这件事多绕几步。题面、代码、测试输出都在磁盘上，命令行是最近的路。
+**想换模型？**
+改 `model=` 一行，`dojo doctor` 确认 ping 通即可。推理型模型在 L5 上偶尔会接近 180 秒，必要时调 `DOJO_TIMEOUT_SEC`。
+
+**`dojo: 找不到命令`？**
+`bin/dojo` 不在 `PATH` 上。`dojo doctor` 会检查并打印该敲的 `ln -s`；若报 `pom.xml 不存在`，那是最早的启动器没解析符号链接，更新仓库即可。
 
 ## 已知限制
 
-- 只支持 Java。拉题时发现接口没给 Java 模板（SQL / Shell 题）会直接报错跳过，不会把 SQL 写进 `Solution.java` 挡住整个模块。
-- 只从 leetcode.cn 拉题（英文站字段不同，没做适配）。
-- 一道题编译不过会挡住 `dojo test` 的全模块编译；报错信息会点出是哪道题挡的，并给出 `dojo clean <题号>`。
-- 生成器按常见签名写，遇到 `Node`、`ListNode[]`、多返回值之类会跳过而不是猜（`Node` 类型定义本身会还原进 `Solution.java`，只是样例转不过去）。
-- 提示质量取决于网关背后的模型；换模型只需改 `model=`。
-- 一次性调用最长等 180 秒（`DOJO_TIMEOUT_SEC` 可调），推理型模型在 L5 上偶尔会到这个量级。
+- 只支持 **Java**。拉题时接口没给 Java 模板（SQL / Shell 题）会直接报错跳过，不会把 SQL 写进 `Solution.java`。
+- 只从 **leetcode.cn** 拉题（英文站字段不同，未适配）。
+- 一道题编译不过会挡住整个模块的 `dojo test`；报错会点出是哪道题，并给出 `dojo clean <题号>`。
+- 生成器按常见签名写，遇到 `Node` 形状的入参、`ListNode[]`、多返回值会跳过而不是猜。
+- 提示质量取决于网关背后的模型；同一个 `SYSTEM`，不同模型的「教练感」差别很大。
+
+<div align="center">
+
+---
+
+**卡住不是失败，卡住是提示该升级了。**
+
+MIT License · [LICENSE](LICENSE)
+
+</div>
