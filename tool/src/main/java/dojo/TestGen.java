@@ -134,10 +134,13 @@ public final class TestGen {
         StringBuilder sb = new StringBuilder();
         sb.append("    @Test\n    void ").append(label).append("() {\n");
         List<String> names = new ArrayList<>();
+        // 解法对象叫 solution；参数名不能把它遮住（比如题目参数就叫 solution）
+        List<String> taken = new ArrayList<>(List.of("solution", "actual"));
         for (int i = 0; i < params.size(); i++) {
             Param param = params.get(i);
-            String name = safeName(param.name(), "arg" + i, names);
+            String name = safeName(param.name(), "arg" + i, taken);
             names.add(name);
+            taken.add(name);
             sb.append("        ").append(javaType(param.type())).append(' ').append(name)
                     .append(" = ").append(literal(param.type(), values.get(i))).append(";\n");
         }
@@ -145,7 +148,7 @@ public final class TestGen {
             if (outputIndex < 0 || outputIndex >= params.size()) {
                 throw new Unsupported("void 题缺少合法的 output.paramindex");
             }
-            sb.append("        s.").append(method).append('(').append(String.join(", ", names)).append(");\n");
+            sb.append("        solution.").append(method).append('(').append(String.join(", ", names)).append(");\n");
             sb.append(assertion(params.get(outputIndex).type(), expectedValue, names.get(outputIndex), unordered));
         } else {
             String actual = "actual";
@@ -153,7 +156,7 @@ public final class TestGen {
                 actual = actual + "_";
             }
             sb.append("        ").append(javaType(type)).append(' ').append(actual)
-                    .append(" = s.").append(method).append('(').append(String.join(", ", names)).append(");\n");
+                    .append(" = solution.").append(method).append('(').append(String.join(", ", names)).append(");\n");
             sb.append(assertion(type, expectedValue, actual, unordered));
         }
         sb.append("    }\n");
@@ -443,7 +446,7 @@ public final class TestGen {
         sb.append("// dojo 依据题目 metaData 与官方样例生成，可直接运行；自己的用例往下加就行。\n");
         sb.append("class ").append(testClass).append(" {\n\n");
         if (withSolution) {
-            sb.append("    private final Solution s = new Solution();\n\n");
+            sb.append("    private final Solution solution = new Solution();\n\n");
         }
         sb.append(body);
         if (!notes.isEmpty()) {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,11 +49,35 @@ class TestGenTest {
         assertTrue(source.contains("class TwoSumTest"), source);
         assertTrue(source.contains("int[] nums = new int[]{2, 7, 11, 15};"), source);
         assertTrue(source.contains("int target = 9;"), source);
-        assertTrue(source.contains("s.twoSum(nums, target)"), source);
+        assertTrue(source.contains("solution.twoSum(nums, target)"), source);
         assertTrue(source.contains("assertArrayEquals(new int[]{0, 1}, actual);"), source);
         assertTrue(source.contains("void officialExample2()"), source);
         assertTrue(source.contains("import static org.junit.jupiter.api.Assertions.*;"), source);
         assertEquals("已生成 2/2 个官方样例", generated.note());
+    }
+
+    @Test
+    void parameterNamedLikeTheSolutionObjectDoesNotShadowIt() {
+        String meta = """
+                {"name":"lengthOfLongestSubstring",
+                 "params":[{"name":"s","type":"string"}],
+                 "return":{"type":"integer"}}
+                """;
+        String examples = "[\"\\\"abcabcbb\\\"\"]";
+        String content = """
+                ```
+                输入：s = "abcabcbb"
+                输出：3
+                ```
+                """;
+        TestGen.Generated generated = TestGen.generate(
+                problem("3", "longest-substring-without-repeating-characters", content, meta, examples),
+                "p0003_x", "XTest", false);
+        assertNotNull(generated.source(), generated.note());
+        String source = generated.source();
+        assertTrue(source.contains("String s = \"abcabcbb\";"), source);
+        assertTrue(source.contains("solution.lengthOfLongestSubstring(s)"), source);
+        assertFalse(source.contains("s.lengthOfLongestSubstring"), source);
     }
 
     @Test
@@ -103,7 +128,7 @@ class TestGenTest {
         String source = TestGen.generate(problem("189", "rotate-array", content, meta, examples),
                 "p0189_rotate_array", "RotateArrayTest", false).source();
         assertNotNull(source);
-        assertTrue(source.contains("s.rotate(nums, k);"), source);
+        assertTrue(source.contains("solution.rotate(nums, k);"), source);
         assertTrue(source.contains("assertArrayEquals(new int[]{5, 6, 7, 1, 2, 3, 4}, nums);"), source);
     }
 
