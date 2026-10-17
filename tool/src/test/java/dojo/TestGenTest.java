@@ -1,0 +1,175 @@
+package dojo;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class TestGenTest {
+
+    private static Problem problem(String number, String slug, String content, String meta, String examples) {
+        return new Problem(number, slug, "标题", "Title", "中等", content,
+                "class Solution {\n}", meta, examples, List.of());
+    }
+
+    @Test
+    void generatesArrayProblem() {
+        String meta = """
+                {"name":"twoSum",
+                 "params":[{"name":"nums","type":"integer[]"},{"name":"target","type":"integer"}],
+                 "return":{"type":"integer[]"}}
+                """;
+        String examples = "[\"[2,7,11,15]\\n9\",\"[3,2,4]\\n6\"]";
+        String content = """
+                **示例 1：**
+
+                ```
+                输入：nums = [2,7,11,15], target = 9
+                输出：[0,1]
+                解释：因为 nums[0] + nums[1] == 9
+                ```
+
+                **示例 2：**
+
+                ```
+                输入：nums = [3,2,4], target = 6
+                输出：[1,2]
+                ```
+                """;
+        TestGen.Generated generated = TestGen.generate(
+                problem("1", "two-sum", content, meta, examples), "p0001_two_sum", "TwoSumTest", false);
+        assertNotNull(generated.source(), generated.note());
+        String source = generated.source();
+        assertTrue(source.contains("package p0001_two_sum;"), source);
+        assertTrue(source.contains("class TwoSumTest"), source);
+        assertTrue(source.contains("int[] nums = new int[]{2, 7, 11, 15};"), source);
+        assertTrue(source.contains("int target = 9;"), source);
+        assertTrue(source.contains("s.twoSum(nums, target)"), source);
+        assertTrue(source.contains("assertArrayEquals(new int[]{0, 1}, actual);"), source);
+        assertTrue(source.contains("void officialExample2()"), source);
+        assertTrue(source.contains("import static org.junit.jupiter.api.Assertions.*;"), source);
+        assertEquals("已生成 2/2 个官方样例", generated.note());
+    }
+
+    @Test
+    void wrapsLinkedListsWithKit() {
+        String meta = """
+                {"name":"addTwoNumbers",
+                 "params":[{"name":"l1","type":"ListNode"},{"name":"l2","type":"ListNode"}],
+                 "return":{"type":"ListNode"}}
+                """;
+        String examples = "[\"[2,4,3]\\n[5,6,4]\"]";
+        String content = "```\n输入：l1 = [2,4,3], l2 = [5,6,4]\n输出：[7,0,8]\n```";
+        String source = TestGen.generate(problem("2", "add-two-numbers", content, meta, examples),
+                "p0002_add_two_numbers", "AddTwoNumbersTest", false).source();
+        assertNotNull(source);
+        assertTrue(source.contains("import kit.ListNode;"), source);
+        assertTrue(source.contains("import kit.ListNodes;"), source);
+        assertTrue(source.contains("ListNodes.of(new int[]{2, 4, 3})"), source);
+        assertTrue(source.contains("assertArrayEquals(new int[]{7, 0, 8}, ListNodes.toArray(actual));"), source);
+    }
+
+    @Test
+    void normalizesUnorderedNestedLists() {
+        String meta = """
+                {"name":"groupAnagrams",
+                 "params":[{"name":"strs","type":"string[]"}],
+                 "return":{"type":"list<list<string>>"}}
+                """;
+        String examples = "[\"[\\\"eat\\\",\\\"tea\\\",\\\"tan\\\",\\\"ate\\\",\\\"nat\\\",\\\"bat\\\"]\"]";
+        String content = "```\n输入：strs = [\"eat\",\"tea\"]\n输出：[[\"bat\"],[\"nat\",\"tan\"],[\"ate\",\"eat\",\"tea\"]]\n```";
+        String source = TestGen.generate(problem("49", "group-anagrams", content, meta, examples),
+                "p0049_group_anagrams", "GroupAnagramsTest", false).source();
+        assertNotNull(source);
+        assertTrue(source.contains("norm("), source);
+        assertTrue(source.contains("Collections.sort"), source);
+        assertTrue(source.contains("new String[]{\"eat\", \"tea\", \"tan\", \"ate\", \"nat\", \"bat\"}"), source);
+    }
+
+    @Test
+    void assertsMutatedArgumentForVoidProblems() {
+        String meta = """
+                {"name":"rotate",
+                 "params":[{"name":"nums","type":"integer[]"},{"name":"k","type":"integer"}],
+                 "return":{"type":"void"},
+                 "output":{"paramindex":0}}
+                """;
+        String examples = "[\"[1,2,3,4,5,6,7]\\n3\"]";
+        String content = "```\n输入：nums = [1,2,3,4,5,6,7], k = 3\n输出：[5,6,7,1,2,3,4]\n```";
+        String source = TestGen.generate(problem("189", "rotate-array", content, meta, examples),
+                "p0189_rotate_array", "RotateArrayTest", false).source();
+        assertNotNull(source);
+        assertTrue(source.contains("s.rotate(nums, k);"), source);
+        assertTrue(source.contains("assertArrayEquals(new int[]{5, 6, 7, 1, 2, 3, 4}, nums);"), source);
+    }
+
+    @Test
+    void generatesDesignProblemFromOperationSequence() {
+        String meta = """
+                {"classname":"LRUCache",
+                 "constructor":{"params":[{"name":"capacity","type":"integer"}]},
+                 "methods":[
+                   {"name":"get","params":[{"name":"key","type":"integer"}],"return":{"type":"integer"}},
+                   {"name":"put","params":[{"name":"key","type":"integer"},{"name":"value","type":"integer"}],
+                    "return":{"type":"void"}}]}
+                """;
+        String examples = "[\"[\\\"LRUCache\\\",\\\"put\\\",\\\"get\\\",\\\"put\\\"]\\n[[2],[1,1],[1],[2,2]]\"]";
+        // 真实题面（leetcode.cn 146）是「输入」「输出」各占一行，没有冒号。
+        String content = "```\n输入\n[\"LRUCache\",\"put\",\"get\",\"put\"]\n"
+                + "[[2],[1,1],[1],[2,2]]\n输出\n[null,null,1,null]\n解释\nLRUCache lRUCache = new LRUCache(2);\n```";
+        TestGen.Generated generated = TestGen.generate(problem("146", "lru-cache", content, meta, examples),
+                "p0146_lru_cache", "LruCacheTest", false);
+        assertNotNull(generated.source(), generated.note());
+        String source = generated.source();
+        assertTrue(source.contains("LRUCache obj = new LRUCache(2);"), source);
+        assertTrue(source.contains("obj.put(1, 1);"), source);
+        assertTrue(source.contains("assertEquals(1, obj.get(1));"), source);
+        assertTrue(source.contains("class LruCacheTest"), source);
+        assertTrue(!source.contains("private final Solution s"), source);
+    }
+
+    @Test
+    void skipsWhenExpectedOutputsAreMissing() {
+        String meta = """
+                {"name":"solve","params":[{"name":"n","type":"integer"}],"return":{"type":"integer"}}
+                """;
+        TestGen.Generated generated = TestGen.generate(
+                problem("9", "weird", "没有示例输出", meta, "[\"1\"]"), "p0009_weird", "WeirdTest", false);
+        assertNull(generated.source());
+        assertTrue(generated.note().contains("输出"), generated.note());
+    }
+
+    @Test
+    void explainsUnsupportedTypes() {
+        String meta = """
+                {"name":"cloneGraph","params":[{"name":"node","type":"Node"}],"return":{"type":"Node"}}
+                """;
+        String content = "```\n输入：adjList = [[2,4]]\n输出：[[2,4]]\n```";
+        TestGen.Generated generated = TestGen.generate(
+                problem("133", "clone-graph", content, meta, "[\"[[2,4]]\"]"), "p0133_clone_graph", "CloneGraphTest", false);
+        assertNull(generated.source());
+        assertTrue(generated.note().contains("还不支持类型"), generated.note());
+    }
+
+    @Test
+    void extractsExpectedOutputsFromFencesOnly() {
+        String content = """
+                描述里也提到输出：99 这种字样，但示例在下面。
+
+                ```
+                输入：nums = [1]
+                输出：[1]
+                ```
+
+                ```
+                输入：nums = [2]
+                输出：[2]
+                ```
+                """;
+        assertEquals(List.of("[1]", "[2]"), TestGen.expectedOutputs(content));
+    }
+}

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# dojo 启动器：工具源码有改动时自动重编译，然后把参数原样交给 jar。
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export DOJO_HOME="$DIR"
+
+JAR="$DIR/tool/target/dojo.jar"
+NEED_BUILD=0
+
+if [[ ! -f "$JAR" ]]; then
+  NEED_BUILD=1
+elif find "$DIR/tool/src/main" -name '*.java' -newer "$JAR" -print -quit | grep -q .; then
+  NEED_BUILD=1
+elif [[ "$DIR/tool/pom.xml" -nt "$JAR" || "$DIR/pom.xml" -nt "$JAR" ]]; then
+  NEED_BUILD=1
+fi
+
+if [[ "$NEED_BUILD" -eq 1 ]]; then
+  echo "编译 dojo 工具…" >&2
+  if ! command -v mvn >/dev/null 2>&1; then
+    echo "找不到 mvn。dojo 需要 Maven 3.9+ 来编译工具；装好后再运行。" >&2
+    exit 1
+  fi
+  mvn -q -B -ntp -f "$DIR/pom.xml" -pl tool -Dmaven.test.skip=true package >&2
+fi
+
+exec java -jar "$JAR" "$@"
