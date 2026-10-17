@@ -37,6 +37,10 @@ public final class TestGen {
             "^\\s*(?:[-*]\\s*)?(?:\\*\\*|__)?\\s*(?:输出|Output)\\s*(?:\\*\\*|__)?\\s*[：:]\\s*(.*)$",
             Pattern.CASE_INSENSITIVE);
 
+    /** 题面自己说顺序无关的（三数之和、子集、组合…），就别用严格顺序去卡用户。 */
+    private static final Pattern LOOSE_ORDER = Pattern.compile(
+            "(?:顺序|次序)[^。；\\n]{0,6}不(?:重要|作要求)|任意顺序|任何顺序|顺序无关|不要求顺序");
+
     private static final Set<String> KEYWORDS = Set.of(
             "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
             "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float",
@@ -90,18 +94,24 @@ public final class TestGen {
         if (cases.isEmpty()) {
             throw new Unsupported("题目没有 jsonExampleTestcases");
         }
-        List<String> expected = expectedOutputs(problem.contentMd());
-        if (expected.isEmpty()) {
+        List<Example> examples = parseExamples(problem.contentMd());
+        if (examples.isEmpty()) {
             throw new Unsupported("题面里没有找到「输出：」行");
         }
 
+        boolean orderFree = unordered || LOOSE_ORDER.matcher(problem.contentMd()).find();
         List<String> tests = new ArrayList<>();
         List<String> notes = new ArrayList<>();
+        Set<Integer> used = new java.util.HashSet<>();
         for (int i = 0; i < cases.size(); i++) {
-            String rawExpected = i < expected.size() ? expected.get(i) : null;
             try {
+                int match = matchExample(cases.get(i), examples, used, i, cases.size() == examples.size());
+                if (match < 0) {
+                    throw new Unsupported("题面示例（" + examples.size() + " 个）里没有与之对应的输入");
+                }
+                used.add(match);
                 tests.add(methodTest("officialExample" + (i + 1), method, params, type, outputIndex,
-                        cases.get(i), rawExpected, unordered));
+                        cases.get(i), examples.get(match).rawOutput(), orderFree));
             } catch (Unsupported e) {
                 notes.add("示例 " + (i + 1) + " 跳过：" + e.getMessage());
             }
@@ -111,8 +121,181 @@ public final class TestGen {
         }
         String source = wrap(pkg, testClass, true, tests, notes);
         String note = "已生成 " + tests.size() + "/" + cases.size() + " 个官方样例"
+                + (orderFree && !unordered ? "（题面说顺序无关，按无序比较）" : "")
                 + (notes.isEmpty() ? "" : "（" + String.join("；", notes) + "）");
         return new Generated(source, note);
+    }
+
+    /** 题面里的一段「输入 … 输出 …」。inputs 解析失败时为 null（只用于按位置兜底）。 */
+    record Example(List<Object> inputs, String rawOutput) {
+    }
+
+    private static final Pattern INPUT_LABEL = Pattern.compile(
+            "^\\s*(?:[-*]\\s*)?(?:\\*\\*|__)?\\s*(?:输入|Input)\\s*(?:\\*\\*|__)?\\s*[：:]\\s*(.*)$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern OUTPUT_LABEL = Pattern.compile(
+            "^\\s*(?:[-*]\\s*)?(?:\\*\\*|__)?\\s*(?:输出|Output)\\s*(?:\\*\\*|__)?\\s*[：:]\\s*(.*)$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern BARE_INPUT = Pattern.compile(
+            "^\\s*(?:[-*]\\s*)?(?:\\*\\*|__)?\\s*(?:输入|Input)\\s*(?:\\*\\*|__)?\\s*$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern BARE_OUTPUT = Pattern.compile(
+            "^\\s*(?:[-*]\\s*)?(?:\\*\\*|__)?\\s*(?:输出|Output)\\s*(?:\\*\\*|__)?\\s*$",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * 把题面里的示例解析成「输入值 + 输出原文」。
+     *
+     * <p>不能按下标硬配：leetcode.cn 的 jsonExampleTestcases 有时只保留 3 个用例，
+     * 而题面写了 5 个（第 13 题就是），按下标配会把 58 当成 4。
+     */
+    static List<Example> parseExamples(String markdown) {
+        List<Example> insideFence = new ArrayList<>();
+        List<Example> everywhere = new ArrayList<>();
+        if (markdown == null) {
+            return List.of();
+        }
+        boolean fence = false;
+        List<String> lines = List.of(markdown.split("\n"));
+        StringBuilder chunk = null;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line.strip().startsWith("```")) {
+                fence = !fence;
+                continue;
+            }
+            Matcher input = INPUT_LABEL.matcher(line);
+            boolean bareInput = BARE_INPUT.matcher(line).matches();
+            if (input.matches() || bareInput) {
+                chunk = new StringBuilder(input.matches() ? input.group(1) : "");
+                continue;
+            }
+            Matcher output = OUTPUT_LABEL.matcher(line);
+            boolean bareOutput = BARE_OUTPUT.matcher(line).matches();
+            if (chunk != null && (output.matches() || bareOutput)) {
+                String raw = output.matches() ? output.group(1) : "";
+                raw = raw == null ? "" : raw.strip();
+                if (raw.isEmpty()) {
+                    raw = nextJsonLine(lines.toArray(new String[0]), i + 1);
+                }
+                if (raw != null && !raw.isBlank()) {
+                    Example example = new Example(parseInputValues(chunk.toString()), raw.strip());
+                    everywhere.add(example);
+                    if (fence) {
+                        insideFence.add(example);
+                    }
+                }
+                chunk = null;
+                continue;
+            }
+            if (chunk != null) {
+                chunk.append('\n').append(line);
+            }
+        }
+        return insideFence.isEmpty() ? everywhere : insideFence;
+    }
+
+    /** 输入块 → 值列表。`nums = [2,7,11,15], target = 9` 这种按顶层逗号切。 */
+    static List<Object> parseInputValues(String chunk) {
+        String text = chunk.replace('\r', ' ').strip();
+        if (text.isEmpty()) {
+            return null;
+        }
+        List<String> parts = splitTopLevel(text);
+        List<Object> values = new ArrayList<>();
+        for (String part : parts) {
+            String segment = part.strip();
+            if (segment.isEmpty()) {
+                continue;
+            }
+            int eq = segment.indexOf('=');
+            String value = eq >= 0 ? segment.substring(eq + 1).strip() : segment;
+            try {
+                values.add(Json.parse(value));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+        return values.isEmpty() ? null : values;
+    }
+
+    private static List<String> splitTopLevel(String text) {
+        List<String> parts = new ArrayList<>();
+        int depth = 0;
+        boolean inString = false;
+        char quote = 0;
+        StringBuilder current = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                current.append(c);
+                if (c == '\\') {
+                    if (i + 1 < text.length()) {
+                        current.append(text.charAt(++i));
+                    }
+                } else if (c == quote) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"' || c == '\'') {
+                inString = true;
+                quote = c;
+                current.append(c);
+            } else if (c == '[' || c == '{' || c == '(') {
+                depth++;
+                current.append(c);
+            } else if (c == ']' || c == '}' || c == ')') {
+                depth--;
+                current.append(c);
+            } else if (c == ',' && depth == 0) {
+                parts.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        parts.add(current.toString());
+        return parts;
+    }
+
+    private static int matchExample(String rawCase, List<Example> examples, Set<Integer> used,
+                                    int position, boolean sameCount) {
+        List<Object> values;
+        try {
+            List<Object> parsed = new ArrayList<>();
+            for (String line : splitLines(rawCase)) {
+                parsed.add(parseValue(line));
+            }
+            values = parsed;
+        } catch (Unsupported e) {
+            return -1;
+        }
+        for (int j = 0; j < examples.size(); j++) {
+            if (used.contains(j) || examples.get(j).inputs() == null) {
+                continue;
+            }
+            if (sameValues(examples.get(j).inputs(), values)) {
+                return j;
+            }
+        }
+        // 示例数与用例数一致时退回按位置配：题面示例的输入写法可能有非 JSON 形式（很少见）。
+        if (sameCount && !used.contains(position)) {
+            return position;
+        }
+        return -1;
+    }
+
+    private static boolean sameValues(List<Object> a, List<Object> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (!java.util.Objects.equals(a.get(i), b.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String methodTest(String label, String method, List<Param> params, String type,
@@ -125,8 +308,7 @@ public final class TestGen {
         for (String line : lines) {
             values.add(parseValue(line));
         }
-        boolean hasExpected = rawExpected != null;
-        if (!hasExpected) {
+        if (rawExpected == null) {
             throw new Unsupported("缺少对应的期望输出");
         }
         Object expectedValue = parseValue(rawExpected);
@@ -280,7 +462,13 @@ public final class TestGen {
             case "integer[][]", "string[][]", "character[][]" -> {
                 return "        assertTrue(Arrays.deepEquals(" + literal(t, expected) + ", " + actual + "));\n";
             }
-            case "list<string>", "list<integer>", "list<list<integer>>" -> {
+            case "list<string>", "list<integer>" -> {
+                return "        assertEquals(" + literal(t, expected) + ", " + actual + ");\n";
+            }
+            case "list<list<integer>>" -> {
+                if (unordered) {
+                    return "        assertEquals(normInts(" + literal(t, expected) + "), normInts(" + actual + "));\n";
+                }
                 return "        assertEquals(" + literal(t, expected) + ", " + actual + ");\n";
             }
             case "list<list<string>>" -> {
@@ -426,6 +614,7 @@ public final class TestGen {
         boolean usesList = body.contains("ListNodes");
         boolean usesTree = body.contains("TreeNodes");
         boolean usesNorm = body.contains("norm(");
+        boolean usesNormInts = body.contains("normInts(");
 
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(pkg).append(";\n\n");
@@ -454,6 +643,21 @@ public final class TestGen {
             for (String note : notes) {
                 sb.append("    // dojo: ").append(note).append('\n');
             }
+        }
+        if (usesNormInts) {
+            sb.append("""
+
+                        private static List<List<Integer>> normInts(List<List<Integer>> value) {
+                            List<List<Integer>> out = new ArrayList<>();
+                            for (List<Integer> inner : value) {
+                                List<Integer> copy = new ArrayList<>(inner);
+                                Collections.sort(copy);
+                                out.add(copy);
+                            }
+                            out.sort(Comparator.comparing(Object::toString));
+                            return out;
+                        }
+                    """);
         }
         if (usesNorm) {
             sb.append("""

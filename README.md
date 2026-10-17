@@ -44,6 +44,7 @@ dojo doctor                                             # 自检：java / mvn / 
 
 ```
 dojo new 146            # 或 dojo new lru-cache，或直接粘 leetcode.cn 的链接
+dojo new 1-100          # 想一次铺开一个区间也行
         │
         ├─ solutions/src/main/java/p0146_lru_cache/Solution.java   ← 在 IDEA 里写
         │
@@ -61,6 +62,7 @@ dojo done               # 打勾，problems/0146-lru-cache/done
 | 命令 | 作用 |
 | --- | --- |
 | `dojo new <slug\|题号\|链接>` | 拉题面、生成 `Solution.java` 与官方样例测试 |
+| `dojo new <a>-<b>` | 批量拉 `a` 到 `b`（含两端，一次最多 300 道） |
 | `dojo hint [1-5] [卡点]` | 要下一档提示；带数字=指定档位，带文字=把你的卡点一起告诉模型 |
 | `dojo test` | 跑这道题的 JUnit 测试，结果写进 `.dojo/last-test.log` |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
@@ -71,6 +73,17 @@ dojo done               # 打勾，problems/0146-lru-cache/done
 | `dojo help` | 用法 |
 
 通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附上卡点；`--no-save` 不写入 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
+
+## 批量拉题
+
+```
+dojo new 1-100      # 1 到 100，含两端；写 100-1 也认
+```
+
+- 逐题拉取，题与题之间停 150 ms；已经在本地的题直接跳过（加 `--force` 才覆盖）
+- 某道题失败（会员题、接口抽风）只记一笔，不中断整批；最后列出失败的题号，`dojo new <题号>` 单独重试
+- 批量时不逐题跑 Maven（100 次 `mvn` 太慢），全部写完统一 `mvn test-compile` 一次；哪个生成的测试编不过就删哪个，并报出题号
+- 一次最多 300 道，防止手滑把磁盘塞满；要更多就分段
 
 ## 清理
 
@@ -141,13 +154,16 @@ tool/              命令行工具本身（单个可执行 jar，零运行时依
 `new` 时用题目的 `metaData` + `jsonExampleTestcases` 做**确定性**转换（不经过模型）：
 
 - 支持 `integer`、`integer[]`、`integer[][]`、`string`、`string[]`、`string[][]`、`character`、`double`、`boolean`、`long`、`list<...>`、`ListNode`、`TreeNode`、`void`（断言被修改的入参）
-- 期望输出从题面的「输出：/Output:」行按序抽取；设计题按操作序列生成 `obj.method(...)`
+- 期望输出不是「第 N 个用例配第 N 个输出」：接口常常只保留 3 个用例而题面写了 5 个（第 13 题就是），所以按**输入值**去题面示例里配对，配不上就跳过，绝不硬安一个错的期望值
+- 设计题按操作序列生成 `obj.method(...)`
 - 单例转不动就跳过这一例并注释原因；全都转不动就跳过整个文件并打印原因，不会写坏文件
-- `--unordered`：`int[]` / `String[]` 排序后比较（答案顺序无关的题）
+- 题面自己写「顺序不重要 / 任意顺序」时自动按无序比较（`int[]` 排序、`List<List<...>>` 归一化）；也可以手动 `--unordered`
 
 生成完会跑一次 `mvn test-compile` 校验：测试自己编译不过 → 删除并警告；解法编译不过 → 保留测试但提示先修解法。
 
-**没有覆盖到的**：`Node`（克隆图）、`ListNode[]` 这类很少见的签名，会明确说「还不支持类型 X」，此时自己照 `problem.md` 写两行测试即可，工具不会因此挡住你。
+- 模板里被注释掉的类型定义（克隆图的 `Node`、随机链表的 `Node`）会被还原成真代码，保证 `Solution.java` 一生成就能编译；`ListNode` / `TreeNode` 用 `kit` 里的版本，不重复定义
+
+**没有覆盖到的**：`Node` 形状的入参、`ListNode[]` 这类很少见的签名，生成器会跳过并说明原因（克隆图的 `metaData` 本身就把参数描述错了，宁可跳过也不猜）。此时自己照 `problem.md` 写两行测试即可，工具不会因此挡住你。
 
 ## 在 IDEA 里怎么用
 
@@ -177,6 +193,6 @@ L1–L4 明确禁止出现可编译的 Java，模型越界会被重问一次；�
 
 - 只支持 Java。
 - 只从 leetcode.cn 拉题（英文站字段不同，没做适配）。
-- 生成器按常见签名写，遇到 `Node`、`ListNode[]`、多返回值之类会跳过而不是猜。
+- 生成器按常见签名写，遇到 `Node`、`ListNode[]`、多返回值之类会跳过而不是猜（`Node` 类型定义本身会还原进 `Solution.java`，只是样例转不过去）。
 - 提示质量取决于网关背后的模型；换模型只需改 `model=`。
 - 一次性调用最长等 180 秒（`DOJO_TIMEOUT_SEC` 可调），推理型模型在 L5 上偶尔会到这个量级。

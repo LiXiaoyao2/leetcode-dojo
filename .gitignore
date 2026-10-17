@@ -6,3 +6,9 @@ target/
 # 本机配置与运行痕迹（不要提交）
 .dojo/
 problems/*/done
+
+# 本地刷题内容：题面、你的解法、生成的测试都留在自己机器上
+problems/*
+!problems/.gitkeep
+solutions/src/main/java/p*/
+solutions/src/test/java/p*/

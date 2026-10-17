@@ -11,6 +11,8 @@ import java.util.Map;
  */
 public final class LeetCode {
 
+    private static java.util.Map<String, String> NUMBER_INDEX;
+
     private static final String ENDPOINT = "https://leetcode.cn/graphql/";
 
     private static final String QUERY = """
@@ -92,30 +94,49 @@ public final class LeetCode {
                 tags);
     }
 
-    /** 题号 → slug。题号是用户在 IDEA 里最可能记住的东西，值得多花一次 1MB 的请求。 */
+    /** 题号 → slug。第一次调用会把整份题目列表（约 1 MB）拉下来，之后走缓存——批量建题只花一次。 */
     public static String slugByNumber(String number) {
-        String wanted = number.strip().replaceFirst("^0+(?=\\d)", "");
+        String wanted = normalizeNumber(number);
+        String slug = numberIndex().get(wanted);
+        if (slug == null || slug.isBlank()) {
+            throw new DojoException("leetcode.cn 上没有题号 " + number + "（可能是会员题，或者你记错号了）。");
+        }
+        return slug;
+    }
+
+    /** 全部题号索引；批量建题时反复用，所以缓存在进程里。 */
+    public static java.util.Map<String, String> numberIndex() {
+        if (NUMBER_INDEX == null) {
+            NUMBER_INDEX = loadNumberIndex();
+        }
+        return NUMBER_INDEX;
+    }
+
+    private static java.util.Map<String, String> loadNumberIndex() {
         Http.Response response = Http.get("https://leetcode.cn/api/problems/all/",
                 Map.of("referer", "https://leetcode.cn/problemset/", "user-agent",
                         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36"),
                 Duration.ofSeconds(30));
         if (!response.ok()) {
-            throw new DojoException("查题号 " + number + " 失败：leetcode.cn 返回 " + response.status() + "。");
+            throw new DojoException("拉题目列表失败：leetcode.cn 返回 " + response.status() + "。");
         }
         Object root = Json.parse(response.body());
         if (!(Json.at(root, "stat_status_pairs") instanceof List<?> pairs)) {
             throw new DojoException("leetcode.cn 的题目列表格式变了，先直接用 slug 或链接建题。");
         }
+        java.util.Map<String, String> index = new java.util.HashMap<>();
         for (Object pair : pairs) {
             String id = Json.strAt(pair, "stat", "frontend_question_id");
-            if (id != null && id.strip().equals(wanted)) {
-                String slug = Json.strAt(pair, "stat", "question__title_slug");
-                if (slug != null && !slug.isBlank()) {
-                    return slug;
-                }
+            String slug = Json.strAt(pair, "stat", "question__title_slug");
+            if (id != null && slug != null && !slug.isBlank()) {
+                index.put(normalizeNumber(id), slug);
             }
         }
-        throw new DojoException("leetcode.cn 上没有题号 " + number + "（可能是会员题，或者你记错号了）。");
+        return index;
+    }
+
+    static String normalizeNumber(String number) {
+        return number.strip().replaceFirst("^0+(?=\\d)", "");
     }
 
     private static String javaSnippet(Object question) {

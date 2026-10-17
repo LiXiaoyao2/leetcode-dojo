@@ -109,4 +109,52 @@ class ScaffoldTest {
         assertTrue(source.contains("class Solution {"), source);
         assertTrue(source.contains("原题没有提供 Java 模板"), source);
     }
+
+    @Test
+    void restoresTypeDefinitionThatLeetCodeOnlyLeavesCommentedOut() {
+        String snippet = """
+                /*
+                // Definition for a Node.
+                class Node {
+                    public int val;
+                    public List<Node> neighbors;
+                    public Node() {}
+                }
+                */
+
+                class Solution {
+                    public Node cloneGraph(Node node) {
+                        return null;
+                    }
+                }
+                """;
+        String source = Scaffold.solutionSource(problem("clone-graph", snippet), "p0133_clone_graph");
+        assertTrue(source.contains("class Node {"), source);
+        assertTrue(source.contains("public List<Node> neighbors;"), source);
+        assertFalse(source.contains("// Definition for a Node."), source);
+        assertTrue(source.contains("import java.util.*;"), source);
+        assertTrue(source.contains("public Node cloneGraph(Node node) {"), source);
+    }
+
+    @Test
+    void doesNotRestoreCommentedOutListNodeBecauseKitHasOne() {
+        String snippet = """
+                /*
+                // Definition for singly-linked list.
+                class ListNode {
+                    int val;
+                    ListNode next;
+                }
+                */
+
+                class Solution {
+                    public ListNode reverseList(ListNode head) {
+                        return head;
+                    }
+                }
+                """;
+        String source = Scaffold.solutionSource(problem("reverse-linked-list", snippet), "p0206_reverse_linked_list");
+        assertFalse(source.contains("class ListNode {"), source);
+        assertTrue(source.contains("import kit.ListNode;"), source);
+    }
 }

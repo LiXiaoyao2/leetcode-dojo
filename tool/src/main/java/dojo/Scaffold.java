@@ -21,7 +21,11 @@ public final class Scaffold {
                           Path testFile, boolean testWritten, String note, String warning) {
     }
 
-    private static final Pattern LEADING_COMMENT = Pattern.compile("(?s)\\A\\s*/\\*\\*.*?\\*/\\s*");
+    /** 模板开头的注释块（LeetCode 常把 Node/Employee 这类题面自带类型的定义放在这里面）。 */
+    private static final Pattern LEADING_COMMENT = Pattern.compile("(?s)\\A\\s*/\\*.*?\\*/\\s*");
+    private static final Pattern CLASS_START = Pattern.compile(
+            "(?m)^\\s*(?:public\\s+)?class\\s+(\\w+)\\s*\\{");
+    private static final List<String> KIT_TYPES = List.of("ListNode", "TreeNode");
     private static final Pattern UTIL_TYPE = Pattern.compile(
             "\\b(List|Map|Set|Queue|Deque|PriorityQueue|HashMap|HashSet|ArrayList|LinkedList|"
                     + "TreeMap|TreeSet|Arrays|Collections|Stack|Iterator|Comparator|Objects)\\b");
@@ -132,23 +136,97 @@ public final class Scaffold {
         return String.join("\n", found.subList(0, Math.min(found.size(), 8)));
     }
 
+    /**
+     * LeetCode 的模板有时把题面自带类型的定义整段注释掉（clone-graph 的 Node、138 的 Node），
+     * 只留下签名里对它的引用。直接删注释会得到编译不过的文件，所以把定义抠出来还原成真代码。
+     * ListNode/TreeNode 用 kit 里的版本，注释里的定义丢弃。
+     */
+    static String helperDefinitions(String template) {
+        java.util.regex.Matcher block = LEADING_COMMENT.matcher(template);
+        if (!block.find()) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>();
+        int common = Integer.MAX_VALUE;
+        for (String line : block.group().split("\\R")) {
+            String cleaned = line
+                    .replaceFirst("^\\s*/\\*+\\s?", "")
+                    .replaceFirst("\\s*\\*/\\s*$", "")
+                    .replaceFirst("^\\s*\\*\\s?", "")
+                    .replaceFirst("^\\s*//\\s?", "");
+            if (cleaned.isBlank()) {
+                lines.add("");
+                continue;
+            }
+            int indent = 0;
+            while (indent < cleaned.length() && cleaned.charAt(indent) == ' ') {
+                indent++;
+            }
+            common = Math.min(common, indent);
+            lines.add(cleaned);
+        }
+        if (common == Integer.MAX_VALUE) {
+            common = 0;
+        }
+        StringBuilder code = new StringBuilder();
+        for (String line : lines) {
+            code.append(line.length() >= common ? line.substring(common) : line.stripLeading()).append('\n');
+        }
+        String text = code.toString();
+        StringBuilder helpers = new StringBuilder();
+        java.util.regex.Matcher start = CLASS_START.matcher(text);
+        while (start.find()) {
+            String name = start.group(1);
+            int open = text.indexOf('{', start.start());
+            int close = matchingBrace(text, open);
+            if (close < 0) {
+                continue;
+            }
+            String blockSource = text.substring(start.start(), close + 1).strip();
+            boolean used = Pattern.compile("\\b" + Pattern.quote(name) + "\\b")
+                    .matcher(template).find();
+            if (used && !KIT_TYPES.contains(name) && !SELF_DEFINED.matcher(template).find()) {
+                helpers.append(blockSource).append('\n');
+            }
+        }
+        return helpers.toString();
+    }
+
+    private static int matchingBrace(String text, int open) {
+        int depth = 0;
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
     static String solutionSource(Problem problem, String pkg) {
         String template = problem.snippetJava();
         if (template == null || template.isBlank()) {
             template = "class Solution {\n\n    // 原题没有提供 Java 模板，从这里开始写。\n}\n";
         }
+        String helpers = helperDefinitions(template);
         template = LEADING_COMMENT.matcher(template).replaceFirst("");
+        String combined = template + "\n" + helpers;
 
         List<String> imports = new ArrayList<>();
-        if (!SELF_DEFINED.matcher(template).find()) {
-            if (template.contains("ListNode")) {
+        if (!SELF_DEFINED.matcher(combined).find()) {
+            if (combined.contains("ListNode")) {
                 imports.add("import kit.ListNode;");
             }
-            if (template.contains("TreeNode")) {
+            if (combined.contains("TreeNode")) {
                 imports.add("import kit.TreeNode;");
             }
         }
-        if (UTIL_TYPE.matcher(template).find()) {
+        if (UTIL_TYPE.matcher(combined).find()) {
             imports.add("import java.util.*;");
         }
 
@@ -163,6 +241,9 @@ public final class Scaffold {
         sb.append("// ").append(problem.id()).append("  ").append(problem.titleZh()).append('\n');
         sb.append("// ").append(problem.url()).append('\n');
         sb.append('\n');
+        if (!helpers.isBlank()) {
+            sb.append(helpers.stripTrailing()).append('\n').append('\n');
+        }
         sb.append(stubEmptyBodies(template).stripTrailing()).append('\n');
         return sb.toString();
     }

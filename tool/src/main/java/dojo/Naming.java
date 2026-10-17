@@ -51,6 +51,28 @@ public final class Naming {
 
     /** 从 URL 或裸 slug 里取出 slug：…/problems/two-sum/description/ → two-sum。 */
     /** 纯数字（或带前导零）当题号处理，例如 new 1 / new 0049。 */
+    /** 1-100、1~100、1 – 100 都算区间；只看形如「数字 分隔 数字」。 */
+    private static final java.util.regex.Pattern RANGE =
+            java.util.regex.Pattern.compile("^\\s*(\\d{1,4})\\s*[-~–—]\\s*(\\d{1,4})\\s*$");
+
+    public static boolean looksRange(String input) {
+        return input != null && RANGE.matcher(input).matches();
+    }
+
+    /** 区间解析成 {from, to}，含两端；写反了自动换过来。 */
+    public static int[] range(String input) {
+        java.util.regex.Matcher matcher = RANGE.matcher(input == null ? "" : input);
+        if (!matcher.matches()) {
+            throw new DojoException("这不是区间：" + input + "（写法如 dojo new 1-100）");
+        }
+        int a = Integer.parseInt(matcher.group(1));
+        int b = Integer.parseInt(matcher.group(2));
+        if (a < 1 || b < 1) {
+            throw new DojoException("题号从 1 开始，区间写成 " + a + "-" + b + " 没有意义。");
+        }
+        return a <= b ? new int[]{a, b} : new int[]{b, a};
+    }
+
     public static boolean looksNumeric(String input) {
         String s = input == null ? "" : input.strip();
         return !s.isEmpty() && s.chars().allMatch(Character::isDigit);

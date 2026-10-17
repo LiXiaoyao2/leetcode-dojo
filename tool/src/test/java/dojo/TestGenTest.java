@@ -197,4 +197,84 @@ class TestGenTest {
                 """;
         assertEquals(List.of("[1]", "[2]"), TestGen.expectedOutputs(content));
     }
+
+    @Test
+    void matchesExpectedOutputByInputWhenApiTrimsExamples() {
+        String meta = """
+                {"name":"romanToInt",
+                 "params":[{"name":"s","type":"string"}],
+                 "return":{"type":"integer"}}
+                """;
+        String examples = "[\"\\\"III\\\"\",\"\\\"LVIII\\\"\",\"\\\"MCMXCIV\\\"\"]";
+        String content = """
+                ```
+                **示例 1:**
+                输入: s = "III"
+                输出: 3
+
+                **示例 2:**
+                输入: s = "IV"
+                输出: 4
+
+                **示例 3:**
+                输入: s = "IX"
+                输出: 9
+
+                **示例 4:**
+                输入: s = "LVIII"
+                输出: 58
+
+                **示例 5:**
+                输入: s = "MCMXCIV"
+                输出: 1994
+                ```
+                """;
+        String source = TestGen.generate(problem("13", "roman-to-integer", content, meta, examples),
+                "p0013_roman_to_integer", "RomanToIntegerTest", false).source();
+        assertTrue(source.contains("assertEquals(3, actual)"), source);
+        assertTrue(source.contains("assertEquals(58, actual)"), source);
+        assertTrue(source.contains("assertEquals(1994, actual)"), source);
+        assertFalse(source.contains("assertEquals(4, actual)"), source);
+        assertFalse(source.contains("assertEquals(9, actual)"), source);
+    }
+
+    @Test
+    void treatsOrderFreeProblemAsUnordered() {
+        String meta = """
+                {"name":"threeSum",
+                 "params":[{"name":"nums","type":"integer[]"}],
+                 "return":{"type":"list<list<integer>>"}}
+                """;
+        String examples = "[\"[-1,0,1,2,-1,-4]\",\"[0,1,1]\"]";
+        String content = """
+                ```
+                输入：nums = [-1,0,1,2,-1,-4]
+                输出：[[-1,-1,2],[-1,0,1]]
+
+                输入：nums = [0,1,1]
+                输出：[]
+                ```
+                注意，输出的顺序和三元组的顺序并不重要。
+                """;
+        String source = TestGen.generate(problem("15", "3sum", content, meta, examples),
+                "p0015_3sum", "P3sumTest", false).source();
+        assertNotNull(source);
+        assertTrue(source.contains("normInts("), source);
+        assertTrue(source.contains("private static List<List<Integer>> normInts"), source);
+    }
+
+    @Test
+    void keepsStrictOrderWhenProblemSaysNothing() {
+        String meta = """
+                {"name":"generate",
+                 "params":[{"name":"numRows","type":"integer"}],
+                 "return":{"type":"list<list<integer>>"}}
+                """;
+        String examples = "[\"5\"]";
+        String content = "```\n输入：numRows = 5\n输出：[[1],[1,1],[1,2,1],[1,3,3,1],[1,4,6,4,1]]\n```";
+        String source = TestGen.generate(problem("118", "pascals-triangle", content, meta, examples),
+                "p0118_pascals_triangle", "PascalsTriangleTest", false).source();
+        assertNotNull(source);
+        assertFalse(source.contains("normInts("), source);
+    }
 }

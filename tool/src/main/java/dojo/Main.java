@@ -7,8 +7,10 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** 命令入口。除了分发和打印，这里不放逻辑——每件事都有单独的类。 */
@@ -128,7 +130,8 @@ public final class Main {
                 dojo — 在 IDE 里刷题，卡住时按阶梯要提示
 
                 用法
-                  dojo new <slug|url>       拉一道题：题面 + Java 模板 + 官方样例测试
+                  dojo new <slug|url|题号>  拉一道题：题面 + Java 模板 + 官方样例测试
+                  dojo new 1-100            批量拉一个区间的题（一次最多 300 道）
                   dojo hint [1-5|卡点]      要下一档提示（也可以指定档位，或直接写你的卡点）
                   dojo test                 跑当前题的单测，日志会留给下一次 hint
                   dojo status               看所有题的进度
@@ -159,6 +162,7 @@ public final class Main {
 
                 日常循环
                   dojo new two-sum      # 拉题
+                  dojo new 1-100        # 批量拉题
                   dojo test             # 先跑一遍，红是正常的
                   dojo hint             # 卡住就要下一档，不卡就别要
                   dojo done             # 过了就收工
@@ -166,16 +170,133 @@ public final class Main {
         return 0;
     }
 
+
+    /** 一次最多拉多少题：够覆盖「1-100」这种诉求，又不至于敲错一个数就把磁盘塞满。 */
+    private static final int BATCH_LIMIT = 300;
+
+    private static int createRange(Repo repo, Args args, int from, int to) {
+        int total = to - from + 1;
+        if (total > BATCH_LIMIT) {
+            throw new DojoException("一次最多 " + BATCH_LIMIT + " 题，你给的是 " + from + "-" + to
+                    + "（" + total + " 题）。分段来，比如 dojo new " + from + "-" + (from + BATCH_LIMIT - 1) + "。");
+        }
+        Ui.step("批量拉题 " + from + "-" + to + "（" + total + " 题）");
+        List<String> failures = new ArrayList<>();
+        Set<Path> generatedTests = new LinkedHashSet<>();
+        int created = 0;
+        int skipped = 0;
+        for (int n = from; n <= to; n++) {
+            String label = String.format(Locale.ROOT, "[%3d/%3d]", n - from + 1, total);
+            String number = String.format(Locale.ROOT, "%04d", n);
+            if (repo.find(number).isPresent() && !args.force) {
+                System.out.printf(Locale.ROOT, "  %s %-58s 跳过（已存在）%n", label, number);
+                skipped++;
+                continue;
+            }
+            try {
+                String slug = LeetCode.slugByNumber(String.valueOf(n));
+                Problem problem = LeetCode.fetch(slug);
+                Scaffold.Outcome outcome = Scaffold.create(repo, problem, args.force, args.noTest,
+                        true, args.unordered);
+                if (outcome.testFile() != null && outcome.testWritten()) {
+                    generatedTests.add(outcome.testFile());
+                }
+                System.out.printf(Locale.ROOT, "  %s %-58s ✓%n", label, outcome.id());
+                created++;
+            } catch (DojoException e) {
+                System.out.printf(Locale.ROOT, "  %s %-58s ✗ %s%n", label, number, oneLine(e.getMessage()));
+                failures.add(number + "（" + e.getMessage() + "）");
+            }
+            if (n < to) {
+                pause(150);
+            }
+        }
+
+        System.out.println();
+        Ui.ok("批量完成 · 新建 " + created + " · 跳过 " + skipped + " · 失败 " + failures.size());
+        if (!failures.isEmpty()) {
+            Ui.warn("失败的题");
+            failures.stream().limit(10).forEach(failure -> System.out.println("  " + failure));
+            if (failures.size() > 10) {
+                System.out.println("  … 另有 " + (failures.size() - 10) + " 道");
+            }
+            Ui.info("重试：dojo new <题号>");
+        }
+        if (!generatedTests.isEmpty() && !args.noTest && !args.noVerify) {
+            verifyBatch(repo, generatedTests);
+        }
+        return failures.isEmpty() ? 0 : 1;
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String oneLine(String message) {
+        return message == null ? "" : message.replaceAll("\\s+", " ").strip();
+    }
+
+    /** 批量建题时每道题都跑一次 mvn 太慢，全部写完统一编译一次；哪道题的测试编不过就删哪道。 */
+    private static void verifyBatch(Repo repo, Set<Path> generatedTests) {
+        Ui.step("统一编译校验 " + generatedTests.size() + " 个新测试 …");
+        Mvn.Result result = Mvn.testCompile(repo.root());
+        if (result.ok()) {
+            Ui.ok("测试全部编译通过");
+            return;
+        }
+        Set<Path> broken = new LinkedHashSet<>();
+        for (String line : result.output().split("\\R")) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("\\[ERROR\\]\\s+(/\\S+?\\.java):\\[\\d+,\\d+\\]").matcher(line);
+            if (!matcher.find()) {
+                continue;
+            }
+            Path path = Path.of(matcher.group(1)).normalize();
+            if (generatedTests.contains(path)) {
+                broken.add(path);
+            }
+        }
+        if (broken.isEmpty()) {
+            Ui.warn("统一编译没通过，但不是新生成的测试引起的：");
+            Mvn.summarize(result).lines().limit(8).forEach(line -> System.out.println("  " + line));
+            return;
+        }
+        for (Path path : broken) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                Ui.warn("删不掉 " + path + "：" + e.getMessage());
+            }
+        }
+        Ui.warn("删掉 " + broken.size() + " 个编译不过的测试（避免拖垮整个模块）：");
+        broken.forEach(path -> System.out.println("  " + repo.root().relativize(path)));
+        Mvn.Result again = Mvn.testCompile(repo.root());
+        if (again.ok()) {
+            Ui.ok("删掉之后模块恢复可编译，其余题不受影响");
+        } else {
+            Ui.warn("还有编译错误，可能出在某个 Solution.java 上：");
+            Mvn.summarize(again).lines().limit(8).forEach(line -> System.out.println("  " + line));
+        }
+    }
+
     private static int createProblem(Args args) {
         String input = args.one("new");
         if (input == null) {
             throw new DojoException("用法：dojo new <slug|url>，例如 dojo new two-sum");
         }
+        Repo repo = Repo.open();
+        if (Naming.looksRange(input)) {
+            int[] bounds = Naming.range(input);
+            return createRange(repo, args, bounds[0], bounds[1]);
+        }
         String slug = Naming.looksNumeric(input) ? LeetCode.slugByNumber(input) : Naming.slugOf(input);
         if (slug == null || slug.isBlank()) {
             throw new DojoException("从「" + input + "」里没解析出题目标识。");
         }
-        Repo repo = Repo.open();
         Ui.step("从 leetcode.cn 拉取 " + slug + " …");
         Problem problem = LeetCode.fetch(slug);
         Ui.info(problem.id() + "  " + problem.title() + "  ·  " + problem.difficultyZh()

@@ -2,7 +2,11 @@ package dojo;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NamingTest {
 
@@ -47,5 +51,24 @@ class NamingTest {
         assertEquals("two-sum", Naming.slugOf("https://leetcode.cn/problems/two-sum/description/?envType=study-plan"));
         assertEquals("two-sum", Naming.slugOf("https://leetcode.com/problems/two-sum/solutions/"));
         assertEquals("two-sum", Naming.slugOf("/problems/two-sum/"));
+    }
+
+    @Test
+    void rangeRecognizesCommonSpellings() {
+        assertTrue(Naming.looksRange("1-100"));
+        assertTrue(Naming.looksRange("1 ~ 100"));
+        assertTrue(Naming.looksRange(" 1 – 5 "));
+        assertFalse(Naming.looksRange("1"));
+        assertFalse(Naming.looksRange("two-sum"));
+        assertFalse(Naming.looksRange("1-2-3"));
+    }
+
+    @Test
+    void rangeParsesInclusiveAndSwapsReversed() {
+        assertArrayEquals(new int[]{1, 100}, Naming.range("1-100"));
+        assertArrayEquals(new int[]{3, 3}, Naming.range("3~3"));
+        assertArrayEquals(new int[]{2, 9}, Naming.range("9-2"));
+        assertThrows(DojoException.class, () -> Naming.range("0-5"));
+        assertThrows(DojoException.class, () -> Naming.range("1-"));
     }
 }
