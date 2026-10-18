@@ -291,8 +291,8 @@ dojo done      # 打勾：problems/0001-two-sum/done
 把 `dojo hint --open` 绑成 External Tool + 快捷键后，光标停在 `Solution.java` 里按一次键：提示直接进 Run 窗口，并同时打开 `problems/<id>/last-hint.md`。逐步配置见 [docs/idea.md](docs/idea.md)。
 
 ```text
-Ctrl+Alt+Shift+H  →  dojo hint --open
-Ctrl+Alt+Shift+T  →  dojo test
+Alt+Shift+H  →  dojo hint --open
+Alt+Shift+T  →  dojo test
 ```
 
 ## 命令

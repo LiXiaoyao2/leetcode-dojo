@@ -27,15 +27,15 @@
 
 `Ctrl+Alt+S` → **Keymap** → 搜索 `dojo hint` → 右键 **Add Keyboard Shortcut**：
 
-- `dojo hint` → `Ctrl+Alt+Shift+H`
-- `dojo test` → `Ctrl+Alt+Shift+T`
+- `dojo hint` → `Alt+Shift+H`
+- `dojo test` → `Alt+Shift+T`
 
 如果和已有快捷键冲突，IDEA 会弹冲突提示，换一个空着的组合即可（这两个默认没被占用）。
 
 ## 3. 用
 
 1. 打开 `solutions/src/main/java/p0001_two_sum/Solution.java`，光标放在文件里；
-2. 按 `Ctrl+Alt+Shift+H`；
+2. 按 `Alt+Shift+H`；
 3. 底部 Run 窗口出现提示正文；同时 `problems/0001-two-sum/last-hint.md` 会在编辑器里打开（有 `idea` 命令时）。
 
 `dojo hint` 会自己发现代码比上次测试新，先跑一遍测试再要提示；所以通常连 `dojo test` 都不用按。
