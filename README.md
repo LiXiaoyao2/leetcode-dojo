@@ -9,7 +9,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 [![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
-[![Tests](https://img.shields.io/badge/tests-90%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Tests](https://img.shields.io/badge/tests-106%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -98,6 +98,20 @@ $ dojo hint 5
 | **L5** | 题解 | 完整 Java + 思路 + 正确性 + 复杂度 + 一个变体 | —— | 不限 |
 
 档位状态不存数据库：数 `problems/<id>/hints.md` 里有多少个 `## L3 · 洞察 · 2026-10-18 01:12` 小节，就知道你走到哪了。删掉最后一节就等于退回上一档，手改也认。
+
+### 卡住也分种类
+
+阶梯是给「思路没到那一步」用的。另一些时刻，你卡的不是思路，是别的东西——这时再走阶梯反而浪费一档：
+
+| 你的情况 | dojo 自动切换 | 给什么 |
+| --- | --- | --- |
+| 编译不过 | **编译修复** | 直接点出哪一行、错在哪、最小改法。不写进 `hints.md`，不消耗档位 |
+| 抛异常 | **定位** | 从栈帧落到你的代码行，解释为什么抛、该检查什么 |
+| 断言挂了 | **反例** | 先摆失败输入 / 期望 / 实际，再问「从哪一步开始偏」。这一档算 L(n)，因为它确实给了信息 |
+
+判断依据是最近一次测试输出（`dojo test` 或 hint 自动跑的那次）。`dojo hint` 自己看，不用你声明。
+
+另外它会拦「连点」：代码一个字没动、也没有新的测试结果时，`dojo hint` 会拒绝推进档位——先按上一档改一次，或 `--force` 强行要。
 
 > 规则全部写在 `tool/src/main/java/dojo/Ladder.java` 的 `SYSTEM` 里。想换教练的语气、篇幅、严格程度，改那一段，`dojo prompt 3` 立刻能看效果，不用重新编译整个工具。
 
@@ -194,6 +208,7 @@ Ctrl+Alt+Shift+T  →  dojo test
 | `dojo new <a>-<b>` | 批量拉 `a` 到 `b`（含两端，一次最多 300 道） |
 | `dojo hint [1-5] [卡点]` | 要下一档提示；代码比上次测试新会先自动跑一遍测试；同时带上「上次之后你改了什么」的 diff；`--open` 额外写并打开 `last-hint.md` |
 | `dojo test` | 跑这道题的 JUnit 测试，摘要写入 `.dojo/last-test.log` |
+| `dojo stress` | 随机对拍：模型写一份暴力解并先过官方样例，再用几百组随机输入和你的解比结果 |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
 | `dojo done` | 标记完成 |
 | `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求 |
@@ -207,6 +222,26 @@ Ctrl+Alt+Shift+T  →  dojo test
 **批量拉题**：逐题拉、间隔 150 ms、已存在跳过、单题失败不中断；全部写完后**统一**跑一次 `mvn test-compile`（而不是 100 次 Maven），编不过的生成测试精确删除并报题号。
 
 **清理**：`dojo clean` 删 `target/` 与 `last-test.log`；`dojo clean 146` 只把这一题的题面/解法/测试移进系统回收站（`mavis-trash` / `gio trash` / `trash-put`，本机有什么用什么），删错了从文件管理器拖回来即可。
+
+## 随机对拍：样例过了，不代表对了
+
+官方样例是别人的用例，专挑你没想到的输入才有用。`dojo stress` 干的就是这件事：
+
+```bash
+dojo stress                # 300 组随机输入，和暴力解比结果
+dojo stress --cases 1000   # 多想一点
+dojo stress --seed 42      # 换一批种子
+dojo stress --refresh      # 之前的暴力解不放心，让模型重写
+```
+
+流程里有两道闸：
+
+1. **暴力解必须先过官方样例**。模型写的 `Brute` 一旦跑不绿官方测试，直接丢弃——不能拿一个错的对照来判你的解错。
+2. **失败信息带 seed**。`seed=18 root=[-1, null, 7, -1] expected=false actual=true` 这样的输出，把 `dojo stress --cases 1 --seed 18` 敲一遍就能原地复现。
+
+输入在测试运行期按种子生成，不是把几百组字面量塞进文件，所以生成器只按签名挑类型：`int[]` 随机长度，`target` 从数组里取两个元素相加，链表用 `ListNodes.of`，树用 `TreeNodes.of`，字符网格随机 0/1。
+
+> 已知边界：返回 `void`（原地修改）、设计题、`List<...>` 返回值的题还不支持；答案本身有多种合法形态的题（比如 two-sum 的多个答案对）会尽量把输入限制成唯一解，仍可能偶发假警报——看到不一致先确认两边是不是都成立。
 
 ## 官方样例是怎么变成 JUnit 的
 
@@ -318,6 +353,9 @@ L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然�
 **生成的测试把自己搞崩了怎么办？**
 带标记的生成测试编译失败时，`dojo test` 会把它移进系统回收站并自动重跑一次。根因也在生成端收紧了：签名对不上就不生成，提示你手写。`dojo new <题> --force` 可重新生成。
 
+**官方样例全绿了，还要 stress 吗？**
+值得跑一次。样例覆盖的是题面给的几个输入；stress 找的是「你的算法在某个边界上偏了一步」这类错误——比如滑动窗口在重复字符时整体清空、BST 只比较父子。跑一次的成本是一次模型调用加几秒 Maven。
+
 **能同时开几道题？**
 能。题面、解法、提示互不干扰；唯一耦合是共享一个 Maven 模块，所以别把编译不过的文件留在里面——`new` 生成的空方法体是 `throw new UnsupportedOperationException("TODO: 还没写")`，保证没动笔时模块也是绿的。
 
@@ -336,6 +374,7 @@ L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然�
 - 只从 **leetcode.cn** 拉题（英文站字段不同，未适配）。
 - 一道题编译不过会挡住整个模块的 `dojo test`；报错会点出是哪道题，并给出 `dojo clean <题号>`。
 - 生成器按常见签名写，遇到 `Node` 形状的入参、`ListNode[]`、多返回值会跳过而不是猜。
+- `dojo stress` 只覆盖「返回值可比较」的题；设计题、返回 `void`、返回 `List<...>` 的题会明说暂不支持，不会硬凑。
 - 提示质量取决于网关背后的模型；同一个 `SYSTEM`，不同模型的「教练感」差别很大。
 - 评测集只有 20 题、每档一次采样，只看趋势；判官与被测模型同源时可能偏爱同一种文风。
 

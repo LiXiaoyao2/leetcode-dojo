@@ -64,6 +64,7 @@ public final class Main {
             case "prompt", "p" -> prompt(rest);
             case "doctor" -> doctor();
             case "clean", "c" -> clean(rest);
+            case "stress" -> stressQuietly(rest);
             default -> {
                 Ui.err("不认识的命令：" + command);
                 Ui.info("dojo help 看用法。");
@@ -87,6 +88,9 @@ public final class Main {
         boolean open;
         boolean debug;
         boolean all;
+        boolean refresh;
+        int cases = 300;
+        long seedBase;
 
         static Args parse(List<String> tokens) {
             Args args = new Args();
@@ -102,6 +106,19 @@ public final class Main {
                     case "--open" -> args.open = true;
                     case "--debug" -> args.debug = true;
                     case "--all" -> args.all = true;
+                    case "--refresh" -> args.refresh = true;
+                    case "--cases" -> {
+                        if (i + 1 >= tokens.size()) {
+                            throw new DojoException("--cases 后面要跟次数，比如 --cases 300。");
+                        }
+                        args.cases = Integer.parseInt(tokens.get(++i));
+                    }
+                    case "--seed" -> {
+                        if (i + 1 >= tokens.size()) {
+                            throw new DojoException("--seed 后面要跟一个整数。");
+                        }
+                        args.seedBase = Long.parseLong(tokens.get(++i));
+                    }
                     case "--problem", "-p" -> {
                         if (i + 1 >= tokens.size()) {
                             throw new DojoException("--problem 后面要跟题号或 slug。");
@@ -115,7 +132,11 @@ public final class Main {
                         args.note = tokens.get(++i);
                     }
                     default -> {
-                        if (token.startsWith("--problem=")) {
+                        if (token.startsWith("--cases=")) {
+                            args.cases = Integer.parseInt(token.substring("--cases=".length()));
+                        } else if (token.startsWith("--seed=")) {
+                            args.seedBase = Long.parseLong(token.substring("--seed=".length()));
+                        } else if (token.startsWith("--problem=")) {
                             args.problem = token.substring("--problem=".length());
                         } else if (token.startsWith("--note=")) {
                             args.note = token.substring("--note=".length());
@@ -188,6 +209,7 @@ public final class Main {
                   dojo status               看所有题的进度
                   dojo done                 把这题标记为完成
                   dojo prompt [1-5]         只打印提示词，不发请求（调试用）
+                  dojo stress               随机对拍：拿暴力解当对照，找样例测不出的错
                   dojo doctor               检查配置、网关和 Java/Maven
                   dojo clean                清构建产物；带题号删这道题（进系统回收站）
                   dojo eval                 跑提示质量评测（开发用，见 eval/RESULTS.md）
@@ -198,15 +220,20 @@ public final class Main {
                 选项
                   -p, --problem <id>        指定题目（默认按当前目录推断）
                   -n, --note <text>         告诉模型你卡在哪，提示会更准
-                      --force               覆盖已存在的题面/解法/测试
+                      --force               覆盖已存在的题面/解法/测试；hint 时忽略「代码没动」
                       --no-test             拉题时不生成测试
                       --no-verify           生成测试后不做编译校验
                       --unordered           答案与顺序无关时，按排序后比较
                       --no-save             这次提示不写进 hints.md
                       --no-run              不在要提示前自动重跑测试
-                      --force               忽略「代码没动」的提醒，直接要下一档
                       --open                把这一档提示写进 last-hint.md 并尝试在 IDEA 里打开
                       --debug               打印完整请求（hint）与异常堆栈
+
+                stress（随机对拍）
+                  dojo stress               300 组随机输入，和 Brute.java 比结果
+                  dojo stress --cases 1000  多跑一点
+                  dojo stress --seed 42     换一批种子
+                  dojo stress --refresh     重新让模型写暴力解
 
                 清理
                   dojo clean                删 target/ 与 .dojo/last-test.log
@@ -719,6 +746,22 @@ public final class Main {
         Ui.line();
         System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note, diff));
         return 0;
+    }
+
+    private static int stressQuietly(Args args) {
+        try {
+            return stress(args);
+        } catch (IOException e) {
+            Ui.err("读写文件失败：" + e.getMessage());
+            return 1;
+        }
+    }
+
+    private static int stress(Args args) throws IOException {
+        Repo repo = Repo.open();
+        String id = repo.resolve(args.one("stress"));
+        Config.Gateway gateway = Config.load(repo);
+        return Stress.run(repo, id, new Stress.Options(args.cases, args.seedBase, args.refresh), new Ai(gateway));
     }
 
     private static int clean(Args args) {

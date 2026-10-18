@@ -42,7 +42,7 @@ public final class TreeNodes {
     public static Integer[] toArray(TreeNode root) {
         List<Integer> out = new ArrayList<>();
         if (root != null) {
-            Deque<TreeNode> queue = new ArrayDeque<>();
+            Deque<TreeNode> queue = new java.util.LinkedList<>();
             queue.add(root);
             while (!queue.isEmpty()) {
                 TreeNode node = queue.poll();
