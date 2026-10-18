@@ -108,6 +108,11 @@ $ dojo hint 5
 | 失败处理 | 生成失败就报错/给模板话术 | 重问 → 照发 + 警示（保留真实信息） |
 | 写题环境 | 网页 / 插件面板 / 独立编辑器 | 你自己的 IDEA + 一个普通 Maven 模块 |
 | 数据 | 云端账号、数据库 | 纯文件：`problem.md`、`hints.md`、`done` |
+| 卡住的原因 | 一律当「不会做」 | 编译错 / 抛异常 / 断言挂 / 思路没到，走不同分支 |
+| 样例过了 | 默认你会了 | `dojo stress` 用随机输入对拍，出错给 seed 复现 |
+| 看懂了 | 没有下一步 | `dojo fade` 把上一份题解挖空 3–5 行，补完再跑测试 |
+| 想系统学 | 让你自己搜 | `dojo learn` 查 24 个模式的信号、模板、前置题 |
+| 效果 | 「感觉挺准」 | `eval/` 20 题 × 3 架构 × 5 档，指标可复算 |
 
 ## 五档阶梯
 
@@ -227,8 +232,8 @@ dojo doctor                                               # java / mvn / PATH / 
 ```
 java    21.0.12.1  (Oracle Corporation)
 mvn     3.9.16
-仓库    /home/lin/code/leetcode-dojo
-dojo    /home/lin/.local/bin/dojo（指向本仓库）
+仓库    ~/code/leetcode-dojo
+dojo    ~/.local/bin/dojo（指向本仓库）
 
 配置来源（按优先级，取第一个有 base URL 的）
   · …（四个来源逐个列出，第一个有值的就是它）
