@@ -9,7 +9,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 [![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
-[![Tests](https://img.shields.io/badge/tests-106%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Tests](https://img.shields.io/badge/tests-118%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -52,6 +52,7 @@ $ dojo hint 5
 - [为什么会有这个东西](#为什么会有这个东西)
 - [它和别的刷题插件有什么不一样](#它和别的刷题插件有什么不一样)
 - [五档阶梯](#五档阶梯)
+- [学习资料：不给你读物，给你下一步](#学习资料不给你读物给你下一步)
 - [一次提示，模型到底看到了什么](#一次提示模型到底看到了什么)
 - [安装](#安装)
 - [60 秒上手](#60-秒上手)
@@ -114,6 +115,61 @@ $ dojo hint 5
 另外它会拦「连点」：代码一个字没动、也没有新的测试结果时，`dojo hint` 会拒绝推进档位——先按上一档改一次，或 `--force` 强行要。
 
 > 规则全部写在 `tool/src/main/java/dojo/Ladder.java` 的 `SYSTEM` 里。想换教练的语气、篇幅、严格程度，改那一段，`dojo prompt 3` 立刻能看效果，不用重新编译整个工具。
+
+## 学习资料：不给你读物，给你下一步
+
+L4 之后多出来这三行：
+
+```
+┌ 这一步过不去的话，三选一
+│ 先练：217 存在重复元素
+│ 看模板：dojo learn hash-map（可复制到 scratch 跑）
+│ 直接要答案：dojo hint 5
+└
+```
+
+不是「再读一篇文章」。这一步过不去，通常只有三种原因，三条出口对应三种：根本没写过这个模式（**先去练一道更简单的**）、见过但写不出来（**看一份 20 行模板**）、已经不想再耗（**直接要答案，不丢人**）。
+
+### dojo learn：24 个模式的本地索引
+
+```
+$ dojo learn monotonic-stack
+单调栈 · monotonic-stack
+本质  维护一个「还没被后面元素打败」的候选序列
+信号  · 要求「下一个更大/更小」
+      · 需要 O(n) 找左右边界
+      · 暴力枚举区间会退化
+子技能 下一个更大元素 / 循环数组 / 柱状图面积
+
+模板（resources/snippets/monotonic-stack.java）
+│ Deque<Integer> st = new ArrayDeque<>();
+│ for (int i = 0; i < a.length; i++) {
+│     while (!st.isEmpty() && a[st.peek()] < a[i]) { ... }
+│     st.push(i);
+│ }
+
+先练  496 下一个更大元素 I
+巩固  739 · 84
+延伸  https://oi-wiki.org/ds/monotonous-stack/
+易错  · 弹栈条件写反 / 栈里存下标还是存值 / 相等元素是否弹出
+```
+
+索引本身是仓库里的 `resources/patterns.md`，可以 review、可以提 PR，`dojo learn --check` 会逐条查字段和 48 条外链。**模型只负责输出一个受控的 `PATTERN: <id>`**，模板、题号、链接一个字都不是它编的——这是「不给模型编链接的机会」和「不当场生成又一篇讲义」的折中。模型认不出时用题面的标签兜底；还是认不出，这三行就不出现，宁缺勿滥。
+
+L4 之后的三行只在**第一次**给：同一个模式第二次出现，它会变成「上次给过：哈希表」，不再重复塞资料。
+
+### dojo fade：把答案挖空，补完就绿
+
+看懂 L5 和能自己写出来是两件事。`dojo fade` 从最近一次 L5 里挑 3–5 个**逻辑行**（return、数组/字段更新、库调用）挖成 `// TODO`，循环头和 if 条件一律不动——动它们只会留下看不懂的编译错误。原文件备份到 `problems/<id>/solution-full.java`。
+
+```
+$ dojo fade
+✓ 已挖掉 3 行 → solutions/src/main/java/p0001_two_sum/Solution.java
+补全这几行，然后 `dojo test`；全绿就说明这一版你真的会了。
+对照原文：dojo fade --show    放弃：dojo fade --restore
+```
+
+挖空后 `dojo test` 会先报「缺少返回语句」，补完才跑断言；`--restore` 一键还原。这比「再看一遍题解」有用，也比让你从空白文件重写温和——门槛刚好落在「需要你自己想，但不用重新搭架子」。
 
 ## 一次提示，模型到底看到了什么
 
@@ -209,6 +265,8 @@ Ctrl+Alt+Shift+T  →  dojo test
 | `dojo hint [1-5] [卡点]` | 要下一档提示；代码比上次测试新会先自动跑一遍测试；同时带上「上次之后你改了什么」的 diff；`--open` 额外写并打开 `last-hint.md` |
 | `dojo test` | 跑这道题的 JUnit 测试，摘要写入 `.dojo/last-test.log` |
 | `dojo stress` | 随机对拍：模型写一份暴力解并先过官方样例，再用几百组随机输入和你的解比结果 |
+| `dojo learn [模式]` | 查 24 个模式的识别信号、模板、前置题、巩固题；`--check` 校验字段与外链 |
+| `dojo fade [--lines N]` | 把最近一次 L5 挖空 3–5 行，补完跑 `dojo test`；`--show` 对照、`--restore` 还原 |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
 | `dojo done` | 标记完成 |
 | `dojo prompt [1-5]` | 只打印将要发给模型的完整请求，不发请求 |
@@ -217,7 +275,7 @@ Ctrl+Alt+Shift+T  →  dojo test
 | `dojo eval` | 开发用：跑提示质量评测（20 题 × 3 架构 × 5 档） |
 | `dojo help` | 用法 |
 
-通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附卡点；`--no-save` 不写 `hints.md`；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
+通用选项：`--problem/-p <id|slug|题号>` 指定题目（默认按当前目录 → 最近修改的解法推断）；`--note/-n <text>` 附卡点；`--no-save` 不写 `hints.md`；`--no-learn` 关掉 L4 后的三行；`--debug` 打印请求；`new` 另有 `--force`、`--no-test`、`--no-verify`、`--unordered`。
 
 **批量拉题**：逐题拉、间隔 150 ms、已存在跳过、单题失败不中断；全部写完后**统一**跑一次 `mvn test-compile`（而不是 100 次 Maven），编不过的生成测试精确删除并报题号。
 
@@ -355,6 +413,15 @@ L1–L4 明确禁止出现可编译的 Java，越界会被重问一次；仍然�
 
 **官方样例全绿了，还要 stress 吗？**
 值得跑一次。样例覆盖的是题面给的几个输入；stress 找的是「你的算法在某个边界上偏了一步」这类错误——比如滑动窗口在重复字符时整体清空、BST 只比较父子。跑一次的成本是一次模型调用加几秒 Maven。
+
+**L4 后面的三行是什么？**
+三选一的下一步：先练一道更简单的、看一份 20 行模板、或直接要答案。它来自 `resources/patterns.md` 而不是模型——模型只输出一个受控的 `PATTERN: <id>`，所以题号、链接不会编。`--no-learn` 可以关掉。
+
+**fade 挖掉的行补不出来怎么办？**
+`dojo fade --show` 打印挖空前的原文，`--restore` 一键还原。如果连着补不出来，说明这道题该退回 L4 再走一遍——硬补只会背答案。
+
+**learn 里的链接失效了怎么办？**
+`dojo learn --check` 会逐条查字段和 48 条外链（会联网）。索引是仓库里的 `resources/patterns.md`，改一行就能修，也欢迎提 PR。
 
 **能同时开几道题？**
 能。题面、解法、提示互不干扰；唯一耦合是共享一个 Maven 模块，所以别把编译不过的文件留在里面——`new` 生成的空方法体是 `throw new UnsupportedOperationException("TODO: 还没写")`，保证没动笔时模块也是绿的。

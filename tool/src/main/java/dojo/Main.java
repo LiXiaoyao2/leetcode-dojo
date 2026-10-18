@@ -53,6 +53,12 @@ public final class Main {
             }
             return Eval.run(rest);
         }
+        if (command.equals("learn")) {
+            return Learn.run(Repo.open(), Arrays.copyOfRange(args, 1, args.length));
+        }
+        if (command.equals("fade")) {
+            return Fade.run(Repo.open(), Arrays.copyOfRange(args, 1, args.length));
+        }
         Args rest = Args.parse(Arrays.asList(args).subList(Math.min(1, args.length), args.length));
         return switch (command) {
             case "help", "-h", "--help" -> help();
@@ -87,6 +93,7 @@ public final class Main {
         boolean noRun;
         boolean open;
         boolean debug;
+        boolean noLearn;
         boolean all;
         boolean refresh;
         int cases = 300;
@@ -104,6 +111,7 @@ public final class Main {
                     case "--no-save" -> args.noSave = true;
                     case "--no-run" -> args.noRun = true;
                     case "--open" -> args.open = true;
+                    case "--no-learn" -> args.noLearn = true;
                     case "--debug" -> args.debug = true;
                     case "--all" -> args.all = true;
                     case "--refresh" -> args.refresh = true;
@@ -217,6 +225,13 @@ public final class Main {
                   dojo eval --report        只重建报告，不调模型
                   dojo eval --noise 5       判官重测同一答案，看主观分方差
 
+                学习资料
+                  dojo learn                列出 24 个模式
+                  dojo learn monotonic-stack  识别信号、模板、前置题、巩固题
+                  dojo fade                 把 L5 挖空 3–5 行，补完再 dojo test
+                  dojo fade --restore       还原挖空前的解法
+                  dojo fade --show          对照挖空前的原文
+
                 选项
                   -p, --problem <id>        指定题目（默认按当前目录推断）
                   -n, --note <text>         告诉模型你卡在哪，提示会更准
@@ -228,6 +243,7 @@ public final class Main {
                       --no-run              不在要提示前自动重跑测试
                       --open                把这一档提示写进 last-hint.md 并尝试在 IDEA 里打开
                       --debug               打印完整请求（hint）与异常堆栈
+                      --no-learn            L4 之后不追加「下一步」
 
                 stress（随机对拍）
                   dojo stress               300 组随机输入，和 Brute.java 比结果
@@ -468,6 +484,10 @@ public final class Main {
                 note = note == null ? first : first + "\n" + note;
             }
         }
+        if (requested > 0) {
+            // 明说「要第 4 档」时按阶梯走；卡点分流只在没指定档位时接管。
+            mode = HintMode.LADDER;
+        }
         boolean repeated = history.stream().anyMatch(turn -> turn.level() == level.number());
         if (repeated) {
             Ui.warn("L" + level.number() + " 之前已经给过；这次算重问，内容可能不一样，也可能还是同一个方向。");
@@ -510,6 +530,22 @@ public final class Main {
         System.out.println();
         System.out.println(result.text().strip());
         System.out.println();
+        String tail = null;
+        if (!args.noLearn && mode == HintMode.LADDER && level.number() == 4) {
+            String patternId = result.patternId() != null ? result.patternId() : Patterns.fromProblem(repo, id);
+            if (patternId != null) {
+                boolean shown = Patterns.seen(repo, patternId);
+                String hint = Patterns.tail(repo, patternId, shown, id);
+                if (hint != null) {
+                    tail = hint;
+                    System.out.println(hint);
+                    System.out.println();
+                    if (!shown) {
+                        Patterns.markSeen(repo, patternId);
+                    }
+                }
+            }
+        }
         Ui.info(oneLine(result.millis()) + " · " + result.model());
         if (result.truncated()) {
             Ui.warn("这次回复被长度上限截断了（已重试一次）。可以再 `dojo hint` 要下一档，或加 --note 让我写短点。");
@@ -520,8 +556,9 @@ public final class Main {
 
         if (args.open) {
             try {
+                String body = tail == null ? result.text() : result.text() + "\n\n" + tail;
                 Path hintFile = mode.countsAsLevel()
-                        ? HintFile.write(repo, id, heading, note, result.text(),
+                        ? HintFile.write(repo, id, heading, note, body,
                                 level.number() < 5
                                         ? "下一档：`dojo hint` → L" + (level.number() + 1) + " · "
                                                 + Ladder.Level.of(level.number() + 1).name() + "\n"

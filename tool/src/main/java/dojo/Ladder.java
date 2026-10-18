@@ -50,7 +50,7 @@ public final class Ladder {
     }
 
     public record HintResult(Level level, String text, boolean leak, boolean truncated, long millis,
-                             int inputTokens, int outputTokens, String model) {
+                             int inputTokens, int outputTokens, String model, String patternId) {
     }
 
     public static final String SYSTEM = """
@@ -170,20 +170,25 @@ public final class Ladder {
             }
         }
 
+        String patternId = Patterns.extract(reply.text());
+        String text = Patterns.strip(reply.text());
+
         boolean leak = false;
-        if (mode != HintMode.COMPILE && level.number() <= 4 && looksLikeJava(reply.text())) {
+        if (mode != HintMode.COMPILE && level.number() <= 4 && looksLikeJava(text)) {
             String retryUser = user + "\n\n（提醒：上一次回复出现了完整可运行的 Java 代码，L" + level.number()
                     + " 不允许。重写这一档，只给「" + level.name() + "」该有的内容。）";
             Ai.Reply second = retry(retryUser, level.budget());
-            if (second != null && !second.text().isBlank() && !looksLikeJava(second.text())) {
+            if (second != null && !second.text().isBlank() && !looksLikeJava(Patterns.strip(second.text()))) {
                 reply = second;
+                patternId = Patterns.extract(reply.text());
+                text = Patterns.strip(reply.text());
             } else {
                 leak = true;
             }
         }
 
-        return new HintResult(level, reply.text(), leak, reply.truncated(), reply.millis(),
-                reply.inputTokens(), reply.outputTokens(), ai.model());
+        return new HintResult(level, text, leak, reply.truncated(), reply.millis(),
+                reply.inputTokens(), reply.outputTokens(), ai.model(), level.number() == 4 ? patternId : null);
     }
 
     private Ai.Reply retry(String user, int budget) {
@@ -264,7 +269,9 @@ public final class Ladder {
             case 1 -> "用 1–2 个具体问题把题意/边界对齐，不透露方向。";
             case 2 -> "点名模式，并解释它为什么适配这里的输入形状；不给步骤。";
             case 3 -> "给那一个关键观察，并说明它消掉了哪个瓶颈。";
-            case 4 -> "给有序步骤、目标复杂度、一个最易错点；不要出现可编译的 Java。";
+            case 4 -> "给有序步骤、目标复杂度、一个最易错点；不要出现可编译的 Java。"
+                    + "回复的第一行必须是 PATTERN: <id>，id 只能从这张表里选（认不出就写 PATTERN: unknown）："
+                    + Patterns.idsLine() + "。这一行不会展示给用户，只用来挑学习资料。";
             default -> "给完整 Java 解法与讲解，最后给一个追问变体。";
         };
     }
