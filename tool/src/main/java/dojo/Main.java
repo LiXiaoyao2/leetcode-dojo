@@ -84,6 +84,7 @@ public final class Main {
         boolean unordered;
         boolean noSave;
         boolean noRun;
+        boolean open;
         boolean debug;
         boolean all;
 
@@ -98,6 +99,7 @@ public final class Main {
                     case "--unordered" -> args.unordered = true;
                     case "--no-save" -> args.noSave = true;
                     case "--no-run" -> args.noRun = true;
+                    case "--open" -> args.open = true;
                     case "--debug" -> args.debug = true;
                     case "--all" -> args.all = true;
                     case "--problem", "-p" -> {
@@ -187,6 +189,7 @@ public final class Main {
                       --unordered           答案与顺序无关时，按排序后比较
                       --no-save             这次提示不写进 hints.md
                       --no-run              不在要提示前自动重跑测试
+                      --open                把这一档提示写进 last-hint.md 并尝试在 IDEA 里打开
                       --debug               打印完整请求（hint）与异常堆栈
 
                 清理
@@ -452,6 +455,17 @@ public final class Main {
         }
         if (result.leak()) {
             Ui.warn("这一档本不该出现完整 Java 代码，模型没守住，重写一次也没改掉。原文照发，你自己取舍。");
+        }
+
+        if (args.open) {
+            try {
+                Path hintFile = HintFile.write(repo, id, level, note, result.text());
+                boolean opened = HintFile.openInIde(hintFile);
+                Ui.info("提示已写入 " + repo.root().relativize(hintFile)
+                        + (opened ? "（已在 IDEA 里打开）" : "（在 IDEA 里双击打开即可）"));
+            } catch (IOException e) {
+                Ui.warn("写 last-hint.md 失败：" + e.getMessage());
+            }
         }
 
         if (args.noSave) {

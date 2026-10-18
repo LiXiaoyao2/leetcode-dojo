@@ -9,7 +9,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 [![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
-[![Tests](https://img.shields.io/badge/tests-87%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Tests](https://img.shields.io/badge/tests-90%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -177,13 +177,22 @@ dojo done      # 打勾：problems/0001-two-sum/done
 
 `dojo status` 随时看战况：每道题拿了哪几档、哪些已完成。
 
+### 不想切出 IDEA
+
+把 `dojo hint --open` 绑成 External Tool + 快捷键后，光标停在 `Solution.java` 里按一次键：提示直接进 Run 窗口，并同时打开 `problems/<id>/last-hint.md`。逐步配置见 [docs/idea.md](docs/idea.md)。
+
+```text
+Ctrl+Alt+Shift+H  →  dojo hint --open
+Ctrl+Alt+Shift+T  →  dojo test
+```
+
 ## 命令
 
 | 命令 | 作用 |
 | --- | --- |
 | `dojo new <slug\|题号\|链接>` | 拉题面 + 解法模板 + 官方样例测试 |
 | `dojo new <a>-<b>` | 批量拉 `a` 到 `b`（含两端，一次最多 300 道） |
-| `dojo hint [1-5] [卡点]` | 要下一档提示；代码比上次测试新会先自动跑一遍测试；同时带上「上次之后你改了什么」的 diff |
+| `dojo hint [1-5] [卡点]` | 要下一档提示；代码比上次测试新会先自动跑一遍测试；同时带上「上次之后你改了什么」的 diff；`--open` 额外写并打开 `last-hint.md` |
 | `dojo test` | 跑这道题的 JUnit 测试，摘要写入 `.dojo/last-test.log` |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
 | `dojo done` | 标记完成 |
