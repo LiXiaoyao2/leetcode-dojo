@@ -424,8 +424,10 @@ public final class Main {
         printPath(repo, repo.solutionFile(outcome.id()), writeState(hadSolution, args.force));
         if (outcome.testFile() != null) {
             printPath(repo, outcome.testFile(), writeState(hadTest, args.force));
-        } else {
+        } else if (args.noTest) {
             System.out.println("  跳过  测试（--no-test）");
+        } else {
+            System.out.println("  跳过  测试（生成失败，原因见上）");
         }
         if (outcome.note() != null) {
             Ui.info(outcome.note());
@@ -988,7 +990,7 @@ public final class Main {
                 System.out.println("  … 共 " + problems.size() + " 道");
                 break;
             }
-            System.out.println("  " + id + "   →  dojo clean " + Naming.number(id));
+            System.out.println("  " + id + "   →  dojo test -p " + Naming.number(id) + " 看完整报错");
         }
         boolean looksSql = output.contains("非法字符: '#'") || output.contains("需要 class、interface、enum 或 record");
         if (looksSql) {

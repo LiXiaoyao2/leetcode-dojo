@@ -78,7 +78,7 @@ public final class Scaffold {
             }
 
             if (testFresh && !noVerify) {
-                warning = verify(repo, testFile);
+                warning = verify(repo, testFile, repo.solutionFile(id));
             }
             return new Outcome(id, problemWritten, solutionWritten,
                     Files.exists(testFile) ? testFile : null, testFresh, note, warning);
@@ -100,7 +100,7 @@ public final class Scaffold {
                 ") {\n        throw new UnsupportedOperationException(\"TODO: 还没写\");\n    }");
     }
 
-    private static String verify(Repo repo, Path testFile) {
+    private static String verify(Repo repo, Path testFile, Path solutionFile) {
         Mvn.Result build = Mvn.testCompile(repo.root());
         if (!build.available()) {
             return "没有编译校验（找不到 mvn）：测试文件写了，但没验证能否编译。";
@@ -117,12 +117,13 @@ public final class Scaffold {
             }
             return "生成的测试编译不过，已删除（避免拖垮 solutions 模块）：\n" + testErrors;
         }
-        String solutionErrors = errorLines(build.output(), "Solution.java");
+        String solutionErrors = errorLines(build.output(), solutionFile.toString());
         if (!solutionErrors.isBlank()) {
-            return "Solution.java 编译不过，dojo test 会先卡在这里（不影响其他题，但建议先让它通过编译）：\n"
-                    + solutionErrors;
+            return "你自己的 Solution.java 编译不过（整个 solutions 模块都会先卡在这里）：\n" + solutionErrors;
         }
-        return "solutions 模块编译失败（不一定是这题造成的）：\n" + Mvn.tail(build.output(), 8);
+        String foreign = errorLines(build.output(), ".java:[");
+        return "solutions 模块编译失败（不是这题造成的——模块里另一道题挡住了，dojo test 会点名）：\n"
+                + (foreign.isBlank() ? Mvn.tail(build.output(), 8) : foreign);
     }
 
     private static String errorLines(String output, String fileName) {

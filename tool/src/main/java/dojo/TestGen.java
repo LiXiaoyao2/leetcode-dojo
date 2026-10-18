@@ -178,7 +178,7 @@ public final class TestGen {
             boolean bareOutput = BARE_OUTPUT.matcher(line).matches();
             if (chunk != null && (output.matches() || bareOutput)) {
                 String raw = output.matches() ? output.group(1) : "";
-                raw = raw == null ? "" : raw.strip();
+                raw = raw == null ? "" : raw.strip().replaceAll("^[*`\\s]+", "").replaceAll("[*`\\s]+$", "");
                 if (raw.isEmpty()) {
                     raw = nextJsonLine(lines.toArray(new String[0]), i + 1);
                 }
