@@ -71,6 +71,7 @@ $ dojo hint 5
 - [一次提示，模型到底看到了什么](#一次提示模型到底看到了什么)
 - [安装](#安装)
 - [60 秒上手](#60-秒上手)
+  - [真实终端](#真实终端)
   - [不想切出 IDEA](#不想切出-idea)
 - [命令](#命令)
 - [随机对拍：样例过了，不代表对了](#随机对拍样例过了不代表对了)
@@ -272,6 +273,18 @@ dojo done      # 打勾：problems/0001-two-sum/done
 ```
 
 `dojo status` 随时看战况：每道题拿了哪几档、哪些已完成。
+
+### 真实终端
+
+下面四张是同一台机器、同一次会话里的真实输出：命令、模型回复、耗时、失败行号都没有改字，只把终端换成了截图样式。
+
+![dojo new 1](docs/assets/step-1-new.png)
+
+![dojo test 红，然后 dojo hint 给 L1](docs/assets/step-2-test-hint.png)
+
+![dojo hint 4 之后的三选一](docs/assets/step-3-next-step.png)
+
+![写完解法，dojo test 绿，dojo status 打勾](docs/assets/step-4-green.png)
 
 ### 不想切出 IDEA
 
