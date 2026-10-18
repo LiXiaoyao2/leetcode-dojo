@@ -162,12 +162,17 @@ public final class Ladder {
         String user = userPrompt(statement, code, testLog, history, level, note, diff, mode);
         Ai.Reply reply = ai.complete(SYSTEM, user, level.budget());
 
-        if (reply.truncated()) {
-            Ai.Reply bigger = retry(user + "\n\n（上一次回复被长度上限截断了，这次务必在规定篇幅内收尾。）",
-                    Math.min(8000, level.budget() * 2));
+        if (reply.truncated() || reply.text().isBlank()) {
+            Ai.Reply bigger = retry(user + "\n\n（上一次回复只返回了思考过程或被长度上限截断，没有正文。"
+                            + "这次直接给正文，不要展开推理，在规定篇幅内收尾。）",
+                    Math.min(8000, Math.max(level.budget() * 2, 4000)));
             if (bigger != null && !bigger.text().isBlank()) {
                 reply = bigger;
             }
+        }
+        if (reply.text().isBlank()) {
+            throw new DojoException("模型这次只返回了思考，没有正文（已重试一次）。再敲一次 `dojo hint`；"
+                    + "或加 --note 让它写短一点。这一档没有记进 hints.md。");
         }
 
         String patternId = Patterns.extract(reply.text());

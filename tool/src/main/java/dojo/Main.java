@@ -464,8 +464,10 @@ public final class Main {
                 }
             }
         }
-        String testLog = Mvn.lastTestFor(repo, id);
-        HintMode mode = HintMode.detect(testLog);
+        // 刚 new 出来、一行没写的模板不当成「抛异常」——那会让第一次 hint 变成定位，而不是 L1。
+        boolean untouched = code != null && code.contains("TODO: 还没写");
+        String testLog = untouched ? null : Mvn.lastTestFor(repo, id);
+        HintMode mode = untouched ? HintMode.LADDER : HintMode.detect(testLog);
         Path snapshot = repo.snapshotFile(id);
         String before = Files.isRegularFile(snapshot) ? read(snapshot) : null;
         String diff = diffOf(before, code);
@@ -495,7 +497,7 @@ public final class Main {
 
         boolean codeUnchanged = "（代码没动）".equals(diff);
         boolean testsNewer = testsRanSince(repo, snapshot);
-        if (!args.force && requested <= 0 && mode == HintMode.LADDER && codeUnchanged && !testsNewer
+        if (!args.force && requested <= 0 && codeUnchanged && !testsNewer
                 && !history.isEmpty()) {
             Ui.warn("代码没动，也没有新的测试结果——先按 L" + history.get(history.size() - 1).level() + " 改一次。");
             Ui.info("确实想直接要下一档，加 --force。");

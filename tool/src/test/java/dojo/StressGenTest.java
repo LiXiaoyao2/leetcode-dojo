@@ -31,9 +31,14 @@ class StressGenTest {
     }
 
     @Test
-    void targetIsBuiltFromTwoElementsSoCasesAreNotAllUnsolvable() {
+    void targetUsesTwoDistinctIndicesAndAnEmptyRunFailsLoudly() {
         String source = StressGen.testSource("p0001_two_sum", "TwoSumStressTest", StressGen.parse(TWO_SUM), 300, 0);
-        assertTrue(source.contains("target = nums.length >= 2 ? nums[rnd.nextInt(nums.length)]"), source);
+        assertTrue(source.contains("target = nums.length >= 2 ? targetOf(rnd, nums)"), source);
+        assertTrue(source.contains("int i = rnd.nextInt(a.length);"), source);
+        assertTrue(source.contains("int j = (i + 1 + rnd.nextInt(a.length - 1)) % a.length;"), source);
+        assertTrue(source.contains("int tested = 0;"), source);
+        assertTrue(source.contains("tested++;"), source);
+        assertTrue(source.contains("if (tested == 0)"), source);
         assertTrue(source.contains("brute.twoSum(nums, target)"), source);
         assertTrue(source.contains("solution.twoSum(nums, target)"), source);
         assertTrue(source.contains("Arrays.equals(expected, actual)"), source);

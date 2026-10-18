@@ -53,6 +53,12 @@ public final class Fade {
                     }
                     fromSolution = true;
                 }
+                case "-p", "--problem" -> {
+                    if (i + 1 >= args.length) {
+                        throw new DojoException(arg + " 后面要跟题号或 slug。");
+                    }
+                    target = args[++i];
+                }
                 case "--force" -> force = true;
                 case "--restore" -> restore = true;
                 case "--show" -> show = true;

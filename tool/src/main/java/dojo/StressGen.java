@@ -115,6 +115,7 @@ public final class StressGen {
         sb.append("    private final Brute brute = new Brute();\n\n");
         sb.append("    @Test\n");
         sb.append("    void randomDifferential() {\n");
+        sb.append("        int tested = 0;\n");
         sb.append("        for (int seed = ").append(seedBase).append("; seed < ")
                 .append(seedBase + cases).append("; seed++) {\n");
         sb.append("            Random rnd = new Random(seed * 1000003L);\n");
@@ -144,6 +145,7 @@ public final class StressGen {
             sb.append("            }\n");
             sb.append("            if (pairs != 1) continue;  // 题面保证唯一答案；多解输入只测出假警报\n");
         }
+        sb.append("            tested++;\n");
 
         String ret = spec.returnType();
         String call = spec.method() + "(" + String.join(", ", argNames) + ")";
@@ -160,6 +162,9 @@ public final class StressGen {
                 .append(" + \" expected=\" + ").append(show(ret, "expected"))
                 .append(" + \" actual=\" + ").append(show(ret, "actual")).append(");\n");
         sb.append("            }\n");
+        sb.append("        }\n");
+        sb.append("        if (tested == 0) {\n");
+        sb.append("            throw new AssertionError(\"没有生成任何满足约束的随机输入，无法对拍：换 --seed 或把 --cases 调大再试。\");\n");
         sb.append("        }\n");
         sb.append("    }\n\n");
         sb.append(helpers());
@@ -181,9 +186,8 @@ public final class StressGen {
             case "int" -> {
                 String tail = switch (p.name()) {
                     case "target" -> arrayName != null
-                            ? name + " = " + arrayName + ".length >= 2 ? " + arrayName
-                                    + "[rnd.nextInt(" + arrayName + ".length)] + " + arrayName
-                                    + "[rnd.nextInt(" + arrayName + ".length)] : rnd.nextInt(21) - 10;"
+                            ? name + " = " + arrayName + ".length >= 2 ? targetOf(rnd, " + arrayName
+                                    + ") : rnd.nextInt(21) - 10;"
                             : name + " = rnd.nextInt(21) - 10;";
                     case "k", "n", "kth", "index", "count", "size" -> arrayName != null
                             ? name + " = " + arrayName + ".length == 0 ? 0 : 1 + rnd.nextInt(" + arrayName
@@ -242,6 +246,12 @@ public final class StressGen {
 
     private static String helpers() {
         return """
+                    private static int targetOf(Random rnd, int[] a) {
+                        int i = rnd.nextInt(a.length);
+                        int j = (i + 1 + rnd.nextInt(a.length - 1)) % a.length;
+                        return a[i] + a[j];
+                    }
+
                     private static int[] randInts(Random rnd, int min, int max) {
                         int n = min + rnd.nextInt(max - min + 1);
                         int[] a = new int[n];
