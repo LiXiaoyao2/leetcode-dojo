@@ -111,6 +111,11 @@ public final class Repo {
                 .resolve("Solution.java");
     }
 
+    /** 上次要提示时那份代码的本地快照；只用于算 diff，不进 git。 */
+    public Path snapshotFile(String id) {
+        return root().resolve(".dojo/snapshots").resolve(id + ".java");
+    }
+
     public String testClass(String id) {
         return Naming.testClass(id);
     }

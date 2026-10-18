@@ -95,4 +95,21 @@ class LadderTest {
         assertFalse(Ladder.looksLikeJava("先想清楚：哈希表存的是「补数」还是「下标」？"));
         assertFalse(Ladder.looksLikeJava("1. 建一个 HashMap\n2. 遍历数组\n3. 查 target - x"));
     }
+
+    @Test
+    void promptCarriesTheDiffWhenTheCodeChanged() {
+        String diff = "@@ -1,2 +1,2 @@\n-        int j = i;\n+        int j = i + 1;\n";
+        String prompt = Ladder.userPrompt("# 两数之和", "class Solution {}", "Errors: 1",
+                List.of(), Ladder.Level.of(2), "还是不对", diff);
+        assertTrue(prompt.contains("【上次要提示之后你改了什么】"), prompt);
+        assertTrue(prompt.contains("+        int j = i + 1;"), prompt);
+        assertTrue(prompt.contains("不要再重复讲同一件事"), prompt);
+    }
+
+    @Test
+    void promptHasNoDiffSectionForTheFirstHint() {
+        String prompt = Ladder.userPrompt("# 两数之和", "class Solution {}", null,
+                List.of(), Ladder.Level.of(1), null, null);
+        assertFalse(prompt.contains("【上次要提示之后你改了什么】"), prompt);
+    }
 }

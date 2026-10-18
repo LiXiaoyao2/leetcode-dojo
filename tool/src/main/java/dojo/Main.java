@@ -83,6 +83,7 @@ public final class Main {
         boolean noVerify;
         boolean unordered;
         boolean noSave;
+        boolean noRun;
         boolean debug;
         boolean all;
 
@@ -96,6 +97,7 @@ public final class Main {
                     case "--no-verify" -> args.noVerify = true;
                     case "--unordered" -> args.unordered = true;
                     case "--no-save" -> args.noSave = true;
+                    case "--no-run" -> args.noRun = true;
                     case "--debug" -> args.debug = true;
                     case "--all" -> args.all = true;
                     case "--problem", "-p" -> {
@@ -137,6 +139,26 @@ public final class Main {
 
     // ------------------------------------------------------------------ 命令
 
+    private static String diffOf(String before, String code) {
+        if (before == null || code == null) {
+            return null;
+        }
+        String diff = Diff.unified(before, code, 3);
+        return diff.isBlank() ? "（代码没动）" : diff;
+    }
+
+    private static void saveSnapshot(Path snapshot, String code) {
+        if (code == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(snapshot.getParent());
+            Files.writeString(snapshot, code, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            Ui.warn("代码快照没写成，下次提示看不到 diff：" + e.getMessage());
+        }
+    }
+
     private static int help() {
         System.out.println("""
                 dojo — 在 IDE 里刷题，卡住时按阶梯要提示
@@ -164,6 +186,7 @@ public final class Main {
                       --no-verify           生成测试后不做编译校验
                       --unordered           答案与顺序无关时，按排序后比较
                       --no-save             这次提示不写进 hints.md
+                      --no-run              不在要提示前自动重跑测试
                       --debug               打印完整请求（hint）与异常堆栈
 
                 清理
@@ -364,7 +387,25 @@ public final class Main {
         if (code == null) {
             Ui.warn("还没找到 " + repo.root().relativize(solution) + "，这次提示只基于题面。");
         }
+        if (!args.noRun && code != null && Mvn.stale(repo, id, solution)) {
+            Path testFile = repo.testFile(id);
+            if (Files.isRegularFile(testFile)) {
+                Ui.step("代码比上次测试新，先跑一遍测试…");
+                Mvn.Result fresh = Mvn.test(repo.root(), repo.testClass(id));
+                Mvn.saveLastTest(repo, id, repo.testClass(id), fresh);
+                if (!fresh.available()) {
+                    Ui.warn("没找到 mvn，这次跳过自动测试（--no-run 可以关掉这个行为）。");
+                } else if (fresh.ok()) {
+                    Ui.info("测试全绿。");
+                } else {
+                    Ui.info("测试还是红的，提示会带上这次的失败输出。");
+                }
+            }
+        }
         String testLog = Mvn.lastTestFor(repo, id);
+        Path snapshot = repo.snapshotFile(id);
+        String before = Files.isRegularFile(snapshot) ? read(snapshot) : null;
+        String diff = diffOf(before, code);
         Path hintsFile = repo.hintsMd(id);
         List<Ladder.Turn> history = Ladder.readHistory(hintsFile);
 
@@ -392,13 +433,13 @@ public final class Main {
             System.out.println("── 请求 ────────────────────────────────");
             System.out.println(Ladder.SYSTEM);
             System.out.println("── user ────────────────────────────────");
-            System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note));
+            System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note, diff));
             System.out.println("────────────────────────────────────────");
         }
         Ui.step("请求 L" + level.number() + " · " + level.name() + "（" + gateway.model() + "）…");
 
         Ladder ladder = new Ladder(ai);
-        Ladder.HintResult result = ladder.hint(statement, code, testLog, history, level, note);
+        Ladder.HintResult result = ladder.hint(statement, code, testLog, history, level, note, diff);
 
         System.out.println();
         Ui.title("L" + level.number() + " · " + level.name());
@@ -419,6 +460,7 @@ public final class Main {
             try {
                 Ladder.append(hintsFile, level, note, result.text());
                 List<Ladder.Turn> after = Ladder.readHistory(hintsFile);
+                saveSnapshot(snapshot, code);
                 if (level.number() < 5) {
                     Ui.info("下一档：dojo hint → L" + (level.number() + 1) + " · "
                             + Ladder.Level.of(level.number() + 1).name()
@@ -602,6 +644,7 @@ public final class Main {
         Path solution = repo.solutionFile(id);
         String code = Files.isRegularFile(solution) ? read(solution) : null;
         String testLog = Mvn.lastTestFor(repo, id);
+        String diff = diffOf(Files.isRegularFile(repo.snapshotFile(id)) ? read(repo.snapshotFile(id)) : null, code);
         List<Ladder.Turn> history = Ladder.readHistory(repo.hintsMd(id));
         String first = args.one("prompt");
         int requested = parseLevel(first);
@@ -615,7 +658,7 @@ public final class Main {
         Ui.line();
         System.out.println(Ladder.SYSTEM);
         Ui.line();
-        System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note));
+        System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note, diff));
         return 0;
     }
 

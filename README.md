@@ -9,7 +9,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 [![JUnit](https://img.shields.io/badge/JUnit-5.10-25A162?logo=junit5&logoColor=white)](https://junit.org/junit5/)
-[![Tests](https://img.shields.io/badge/tests-75%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
+[![Tests](https://img.shields.io/badge/tests-87%20passing-2ea44f)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-6f42c1)](https://github.com/LiXiaoyao2/leetcode-dojo)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -106,13 +106,16 @@ $ dojo hint 5
 ```
 【题目】            题面（去掉图片噪声，保留样例与约束，最多 9000 字符）
 【我当前的代码】     磁盘上的真实文件 + 行号（中间截断，保留头尾）
-【最近一次测试输出】  上一次 dojo test 的摘要（Maven 噪声已过滤）
+【上次之后你改了什么】 与上一次要提示时的代码快照做 diff（- 旧行 / + 新行）
+【最近一次测试输出】  上一次测试的摘要（Maven 噪声已过滤；代码改过会先自动重跑）
 【已经给过的提示】    L1..Ln 原文（每条截断到 900 字符）
 【这一档】           L3 · 洞察 —— 该档的指令与禁令
 【我自己的卡点】      可选：dojo hint "我卡在边界处理"
 ```
 
 外加一段 `SYSTEM`：中文、直给、无开场白、不复述题面、不灌鸡汤、禁止重复、引用行号必须与标注一致、测试全绿时把这一档用在更优解而不是让你重跑。
+
+最后一行 diff 是它不把同一句话说第二遍的关键：上一档之后你动了哪几行，它看得见，所以能先判「你改对了没有」，再决定这一档讲什么。快照在 `.dojo/snapshots/`，不进 git，只存最后一次要提示时的代码；不想要这个行为可以 `dojo hint --no-run` 跳过自动测试，`--no-save` 则不写档位也不更新快照。
 
 **为什么要给你看这些？** 因为 `dojo prompt 3` 会把上面整段原样打印出来，不发请求。提示词不是黑盒，调它不需要读工具源码。
 
@@ -167,7 +170,7 @@ solutions/src/test/java/p0001_two_sum/TwoSumTest.java    官方样例的 JUnit 5
 然后在 IDEA 里只改一个文件，卡住时：
 
 ```bash
-dojo test      # 跑官方样例；失败摘要会留给下一次 hint
+dojo test      # 跑官方样例（不跑也行：hint 发现代码比上次测试新，会先替你跑一遍）
 dojo hint      # L1 → L2 → L3 → L4 → L5，每次只推进一格
 dojo done      # 打勾：problems/0001-two-sum/done
 ```
@@ -180,7 +183,7 @@ dojo done      # 打勾：problems/0001-two-sum/done
 | --- | --- |
 | `dojo new <slug\|题号\|链接>` | 拉题面 + 解法模板 + 官方样例测试 |
 | `dojo new <a>-<b>` | 批量拉 `a` 到 `b`（含两端，一次最多 300 道） |
-| `dojo hint [1-5] [卡点]` | 要下一档提示；带数字=指定档位，带文字=把你的卡点一起告诉模型 |
+| `dojo hint [1-5] [卡点]` | 要下一档提示；代码比上次测试新会先自动跑一遍测试；同时带上「上次之后你改了什么」的 diff |
 | `dojo test` | 跑这道题的 JUnit 测试，摘要写入 `.dojo/last-test.log` |
 | `dojo status` | 所有题的目标、最高档位、是否完成 |
 | `dojo done` | 标记完成 |

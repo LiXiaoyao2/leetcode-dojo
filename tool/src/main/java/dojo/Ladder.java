@@ -145,7 +145,12 @@ public final class Ladder {
 
     public HintResult hint(String statement, String code, String testLog, List<Turn> history,
                            Level level, String note) {
-        String user = userPrompt(statement, code, testLog, history, level, note);
+        return hint(statement, code, testLog, history, level, note, null);
+    }
+
+    public HintResult hint(String statement, String code, String testLog, List<Turn> history,
+                           Level level, String note, String diff) {
+        String user = userPrompt(statement, code, testLog, history, level, note, diff);
         Ai.Reply reply = ai.complete(SYSTEM, user, level.budget());
 
         if (reply.truncated()) {
@@ -182,10 +187,19 @@ public final class Ladder {
 
     public static String userPrompt(String statement, String code, String testLog, List<Turn> history,
                                     Level level, String note) {
+        return userPrompt(statement, code, testLog, history, level, note, null);
+    }
+
+    public static String userPrompt(String statement, String code, String testLog, List<Turn> history,
+                                    Level level, String note, String diff) {
         StringBuilder sb = new StringBuilder();
         sb.append("【题目】\n").append(clip(statement, 9000)).append("\n\n");
         sb.append("【我当前的代码（行号是文件里的真实行号）】\n");
         sb.append(code == null || code.isBlank() ? "（还没动笔）" : clipMiddle(code, 9000)).append("\n\n");
+        if (diff != null && !diff.isBlank()) {
+            sb.append("【上次要提示之后你改了什么】（- 是旧行，+ 是新行；没改就说明他没动）\n");
+            sb.append(clipMiddle(diff, 2500)).append("\n\n");
+        }
         sb.append("【最近一次测试输出】\n");
         sb.append(testLog == null || testLog.isBlank() ? "（还没跑过）" : clipTail(testLog, 3000)).append("\n\n");
         sb.append("【已经给过的提示】\n");
@@ -196,6 +210,11 @@ public final class Ladder {
                 sb.append("### L").append(turn.level()).append(" · ").append(turn.header()).append('\n')
                         .append(clip(turn.body(), 900)).append("\n\n");
             }
+        }
+        if (diff != null && !diff.isBlank()) {
+            sb.append("注意上面的 diff 和测试输出：如果他按上一档改过，先看改对没有、还差什么，不要再重复讲同一件事；")
+                    .append("如果没改，就针对现状说，别假设他改了；如果这次改动让测试从绿变红（例如返回值形状、")
+                    .append("循环边界被改坏），先用一句话指出改坏了什么，再讲这一档。\n\n");
         }
         sb.append("【这一档】L").append(level.number()).append(" · ").append(level.name()).append('\n');
         sb.append(instruction(level)).append("\n\n");

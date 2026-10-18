@@ -133,6 +133,28 @@ public final class Mvn {
         }
     }
 
+    /** 代码改过、日志还是旧的，就该先重跑一次测试再要提示。 */
+    public static boolean stale(Repo repo, String id, java.nio.file.Path code) {
+        if (code == null || !Files.isRegularFile(code)) {
+            return false;
+        }
+        Path log = repo.root().resolve(".dojo/last-test.log");
+        if (!Files.isRegularFile(log)) {
+            return true;
+        }
+        try {
+            String text = Files.readString(log, StandardCharsets.UTF_8);
+            int marker = text.indexOf("---\n");
+            String header = marker < 0 ? text : text.substring(0, marker);
+            if (!header.contains("problem=" + id + "\n")) {
+                return true;
+            }
+            return Files.getLastModifiedTime(code).toMillis() > Files.getLastModifiedTime(log).toMillis();
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
     /** 只有「最近一次跑的就是这道题」才把日志交给模型，避免张冠李戴。 */
     public static String lastTestFor(Repo repo, String id) {
         Path file = repo.root().resolve(".dojo/last-test.log");
