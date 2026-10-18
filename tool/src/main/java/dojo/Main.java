@@ -65,7 +65,7 @@ public final class Main {
             case "new", "n" -> createProblem(rest);
             case "hint", "h" -> hint(rest);
             case "test", "t" -> test(rest);
-            case "status", "s" -> status();
+            case "status", "s" -> status(rest);
             case "done", "d" -> done(rest);
             case "prompt", "p" -> prompt(rest);
             case "doctor" -> doctor();
@@ -408,15 +408,24 @@ public final class Main {
         Ui.info(problem.id() + "  " + problem.title() + "  ·  " + problem.difficultyZh()
                 + (problem.tags().isEmpty() ? "" : "  ·  " + String.join(" / ", problem.tags())));
 
+        String plannedId = problem.id();
+        boolean hadProblem = Files.isRegularFile(repo.problemMd(plannedId));
+        boolean hadSolution = Files.isRegularFile(repo.solutionFile(plannedId));
+        boolean hadTest = Files.isRegularFile(repo.testFile(plannedId));
+        if (args.force && (hadProblem || hadSolution || hadTest)) {
+            Ui.warn("--force：下面这些已存在的文件会被覆盖（建议先 git status / git diff）");
+        }
         Scaffold.Outcome outcome = Scaffold.create(repo, problem, args.force, args.noTest,
                 args.noVerify, args.unordered);
 
         System.out.println();
         Ui.ok("已就绪：" + outcome.id());
-        printPath(repo, repo.problemMd(outcome.id()), outcome.problemWritten() ? "新建" : "已存在");
-        printPath(repo, repo.solutionFile(outcome.id()), outcome.solutionWritten() ? "新建" : "已存在");
+        printPath(repo, repo.problemMd(outcome.id()), writeState(hadProblem, args.force));
+        printPath(repo, repo.solutionFile(outcome.id()), writeState(hadSolution, args.force));
         if (outcome.testFile() != null) {
-            printPath(repo, outcome.testFile(), outcome.testWritten() ? "新建" : "已存在");
+            printPath(repo, outcome.testFile(), writeState(hadTest, args.force));
+        } else {
+            System.out.println("  跳过  测试（--no-test）");
         }
         if (outcome.note() != null) {
             Ui.info(outcome.note());
@@ -428,8 +437,19 @@ public final class Main {
         System.out.println("下一步");
         System.out.println("  1. 打开 " + repo.root().relativize(repo.solutionFile(outcome.id())));
         System.out.println("  2. 卡住时：dojo hint");
-        System.out.println("  3. 写完：dojo test");
+        if (outcome.testFile() != null) {
+            System.out.println("  3. 写完：dojo test");
+        } else {
+            System.out.println("  3. 补测试：dojo new " + Naming.slug(outcome.id()) + "（不会覆盖 Solution）");
+        }
         return 0;
+    }
+
+    private static String writeState(boolean existed, boolean force) {
+        if (!existed) {
+            return "新建";
+        }
+        return force ? "覆盖" : "已存在";
     }
 
     private static void printPath(Repo repo, Path path, String state) {
@@ -449,7 +469,9 @@ public final class Main {
         if (code == null) {
             Ui.warn("还没找到 " + repo.root().relativize(solution) + "，这次提示只基于题面。");
         }
-        if (!args.noRun && code != null && Mvn.stale(repo, id, solution)) {
+        // 刚 new 出来、一行没写的模板不当成「抛异常」——那会让第一次 hint 变成定位，而不是 L1。
+        boolean untouched = code != null && code.contains("TODO: 还没写");
+        if (!args.noRun && !untouched && code != null && Mvn.stale(repo, id, solution)) {
             Path testFile = repo.testFile(id);
             if (Files.isRegularFile(testFile)) {
                 Ui.step("代码比上次测试新，先跑一遍测试…");
@@ -464,9 +486,16 @@ public final class Main {
                 }
             }
         }
-        // 刚 new 出来、一行没写的模板不当成「抛异常」——那会让第一次 hint 变成定位，而不是 L1。
-        boolean untouched = code != null && code.contains("TODO: 还没写");
         String testLog = untouched ? null : Mvn.lastTestFor(repo, id);
+        if (!untouched && testLog != null && testLog.contains("COMPILATION ERROR")) {
+            String blocker = foreignErrorOwner(repo, id, testLog);
+            if (blocker != null) {
+                Ui.err("上次测试是编译失败，错在 " + blocker + "，不是这道题。");
+                Ui.info("先把 " + blocker + " 编译过（dojo test -p " + Naming.number(blocker)
+                        + " 看完整报错）；确实不要它再 dojo clean " + Naming.number(blocker) + "。");
+                return 1;
+            }
+        }
         HintMode mode = untouched ? HintMode.LADDER : HintMode.detect(testLog);
         Path snapshot = repo.snapshotFile(id);
         String before = Files.isRegularFile(snapshot) ? read(snapshot) : null;
@@ -626,8 +655,8 @@ public final class Main {
         Path testFile = repo.testFile(id);
         if (!Files.isRegularFile(testFile)) {
             throw new DojoException("本地没有 " + repo.root().relativize(testFile)
-                    + "，先 `dojo new " + Naming.slug(id) + "`（已有的题可以 `dojo new " + Naming.slug(id)
-                    + " --force` 重新生成测试）。");
+                    + "。补生成测试：`dojo new " + Naming.slug(id)
+                    + "`（不会动你的 Solution；`--force` 才会覆盖）。");
         }
         Ui.step("mvn test -Dtest=" + testClass + " …");
         Mvn.Result result = Mvn.test(repo.root(), testClass);
@@ -714,9 +743,12 @@ public final class Main {
         return doomed;
     }
 
-    private static int status() {
+    private static int status(Args args) {
         Repo repo = Repo.open();
-        List<String> ids = repo.problemIds();
+        String only = args.problem;
+        List<String> ids = only == null ? repo.problemIds()
+                : List.of(repo.find(only).orElseThrow(
+                        () -> new DojoException("本地没有 " + only + "，没有可显示的。")));
         if (ids.isEmpty()) {
             Ui.info("还没有题。`dojo new two-sum` 开始。");
             return 0;
@@ -798,14 +830,15 @@ public final class Main {
 
     private static int stress(Args args) throws IOException {
         Repo repo = Repo.open();
-        String id = repo.resolve(args.one("stress"));
+        String target = args.problem != null ? args.problem : args.one("stress");
+        String id = repo.resolve(target);
         Config.Gateway gateway = Config.load(repo);
         return Stress.run(repo, id, new Stress.Options(args.cases, args.seedBase, args.refresh), new Ai(gateway));
     }
 
     private static int clean(Args args) {
         Repo repo = Repo.open();
-        String target = args.one("clean");
+        String target = args.problem != null ? args.problem : args.one("clean");
         if (args.all && target != null) {
             throw new DojoException("--all 不接受题号：要么 `dojo clean --all`，要么 `dojo clean <题>`。");
         }
@@ -888,6 +921,7 @@ public final class Main {
         } else {
             System.out.println("dojo    " + onPath + (pointsHere(onPath, repo) ? "（指向本仓库）" : "（不是本仓库的 bin/dojo）"));
         }
+        System.out.println("本仓库   " + repo.root().resolve("bin/dojo"));
         System.out.println();
         System.out.println("配置来源（按优先级，取第一个有 base URL 的）");
         for (String line : Config.sourcesForDoctor(repo)) {
@@ -956,7 +990,30 @@ public final class Main {
             }
             System.out.println("  " + id + "   →  dojo clean " + Naming.number(id));
         }
-        Ui.info("多半是 SQL / Shell 题：没有 Java 模板，留在 solutions 里只会挡住所有题。");
+        boolean looksSql = output.contains("非法字符: '#'") || output.contains("需要 class、interface、enum 或 record");
+        if (looksSql) {
+            Ui.info("多半是 SQL / Shell 题：没有 Java 模板，留在 solutions 里只会挡住所有题。");
+        } else {
+            Ui.info("这是本仓库里的文件：修好它，或单独 `dojo test -p <题号>` 看完整报错。");
+            Ui.info("确实不要这道题了，再 `dojo clean <题号>`（会进回收站，可恢复）。");
+        }
+    }
+
+    /** 上次测试日志里的编译错误属于哪道题（不是当前题才返回）；找不到返回 null。 */
+    private static String foreignErrorOwner(Repo repo, String currentId, String output) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:^|\\s)(/[^\\s:]*?\\.java)(?=:\\[)").matcher(output);
+        while (matcher.find()) {
+            try {
+                String id = repo.pathToId(Path.of(matcher.group(1))).orElse(null);
+                if (id != null && !id.equals(currentId)) {
+                    return id;
+                }
+            } catch (RuntimeException ignored) {
+                // 路径不是本仓库的，忽略
+            }
+        }
+        return null;
     }
 
     /** Maven 编译失败时 surefire 根本不会启动，不能把它当成「测试失败」来读。 */
