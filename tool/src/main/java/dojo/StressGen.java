@@ -151,7 +151,7 @@ public final class StressGen {
         String call = spec.method() + "(" + String.join(", ", argNames) + ")";
         sb.append("            ").append(ret).append(" expected = brute.").append(call).append(";\n");
         sb.append("            ").append(ret).append(" actual = solution.").append(call).append(";\n");
-        sb.append(compare(ret));
+        sb.append(compare(spec, ret));
 
         StringBuilder message = new StringBuilder("\"seed=\" + seed");
         for (int i = 0; i < spec.params().size(); i++) {
@@ -216,8 +216,15 @@ public final class StressGen {
         };
     }
 
-    private static String compare(String ret) {
+    private static String compare(Spec spec, String ret) {
         String indent = "            ";
+        if (uniqueTwoSum(spec)) {
+            return indent + "int[] e = expected.clone();\n"
+                    + indent + "int[] a = actual.clone();\n"
+                    + indent + "Arrays.sort(e);\n"
+                    + indent + "Arrays.sort(a);\n"
+                    + indent + "if (!Arrays.equals(e, a)) {\n";
+        }
         String check = switch (ret) {
             case "int", "long", "boolean", "char" -> "if (expected != actual) {";
             case "double" -> "if (Math.abs(expected - actual) > 1e-6) {";

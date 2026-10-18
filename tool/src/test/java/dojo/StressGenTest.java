@@ -41,7 +41,10 @@ class StressGenTest {
         assertTrue(source.contains("if (tested == 0)"), source);
         assertTrue(source.contains("brute.twoSum(nums, target)"), source);
         assertTrue(source.contains("solution.twoSum(nums, target)"), source);
-        assertTrue(source.contains("Arrays.equals(expected, actual)"), source);
+        // two-sum 允许任意下标顺序：对拍不能把 [1,0] 当成错
+        assertTrue(source.contains("int[] e = expected.clone();"), source);
+        assertTrue(source.contains("Arrays.sort(e);"), source);
+        assertTrue(source.contains("Arrays.equals(e, a)"), source);
         assertTrue(source.contains("seed=\" + seed"), source);
     }
 
