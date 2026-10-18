@@ -13,7 +13,7 @@
 | 字段 | 值 |
 | --- | --- |
 | Name | `dojo hint` |
-| Program | `/home/lin/.local/bin/dojo`（或 `$ProjectFileDir$/bin/dojo`） |
+| Program | `~/.local/bin/dojo`（或 `$ProjectFileDir$/bin/dojo`） |
 | Arguments | `hint --open` |
 | Working directory | `$FileDir$` |
 
