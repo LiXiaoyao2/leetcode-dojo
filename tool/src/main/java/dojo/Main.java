@@ -149,6 +149,21 @@ public final class Main {
         return diff.isBlank() ? "（代码没动）" : diff;
     }
 
+    private static boolean testsRanSince(Repo repo, Path snapshot) {
+        Path log = repo.root().resolve(".dojo/last-test.log");
+        if (!Files.isRegularFile(log)) {
+            return false;
+        }
+        try {
+            if (!Files.isRegularFile(snapshot)) {
+                return true;
+            }
+            return Files.getLastModifiedTime(log).toMillis() > Files.getLastModifiedTime(snapshot).toMillis();
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
     private static void saveSnapshot(Path snapshot, String code) {
         if (code == null) {
             return;
@@ -189,6 +204,7 @@ public final class Main {
                       --unordered           答案与顺序无关时，按排序后比较
                       --no-save             这次提示不写进 hints.md
                       --no-run              不在要提示前自动重跑测试
+                      --force               忽略「代码没动」的提醒，直接要下一档
                       --open                把这一档提示写进 last-hint.md 并尝试在 IDEA 里打开
                       --debug               打印完整请求（hint）与异常堆栈
 
@@ -406,6 +422,7 @@ public final class Main {
             }
         }
         String testLog = Mvn.lastTestFor(repo, id);
+        HintMode mode = HintMode.detect(testLog);
         Path snapshot = repo.snapshotFile(id);
         String before = Files.isRegularFile(snapshot) ? read(snapshot) : null;
         String diff = diffOf(before, code);
@@ -429,6 +446,15 @@ public final class Main {
             Ui.warn("L" + level.number() + " 之前已经给过；这次算重问，内容可能不一样，也可能还是同一个方向。");
         }
 
+        boolean codeUnchanged = "（代码没动）".equals(diff);
+        boolean testsNewer = testsRanSince(repo, snapshot);
+        if (!args.force && requested <= 0 && mode == HintMode.LADDER && codeUnchanged && !testsNewer
+                && !history.isEmpty()) {
+            Ui.warn("代码没动，也没有新的测试结果——先按 L" + history.get(history.size() - 1).level() + " 改一次。");
+            Ui.info("确实想直接要下一档，加 --force。");
+            return 1;
+        }
+
         Config.Gateway gateway = Config.load(repo);
         Ai ai = new Ai(gateway);
         if (args.debug) {
@@ -436,16 +462,24 @@ public final class Main {
             System.out.println("── 请求 ────────────────────────────────");
             System.out.println(Ladder.SYSTEM);
             System.out.println("── user ────────────────────────────────");
-            System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note, diff));
+            System.out.println("（模式：" + mode.label() + "）");
+            System.out.println(Ladder.userPrompt(statement, code, testLog, history, level, note, diff, mode));
             System.out.println("────────────────────────────────────────");
         }
-        Ui.step("请求 L" + level.number() + " · " + level.name() + "（" + gateway.model() + "）…");
+        Ui.step(mode.countsAsLevel()
+                ? "请求 L" + level.number() + " · " + level.name() + "（" + gateway.model() + "）…"
+                : "请求 " + mode.label() + "（" + gateway.model() + "）…");
 
         Ladder ladder = new Ladder(ai);
-        Ladder.HintResult result = ladder.hint(statement, code, testLog, history, level, note, diff);
+        Ladder.HintResult result = ladder.hint(statement, code, testLog, history, level, note, diff, mode);
 
         System.out.println();
-        Ui.title("L" + level.number() + " · " + level.name());
+        String heading = switch (mode) {
+            case LADDER -> "L" + level.number() + " · " + level.name();
+            case COUNTEREXAMPLE -> "L" + level.number() + " · 反例";
+            default -> mode.label();
+        };
+        Ui.title(heading);
         System.out.println();
         System.out.println(result.text().strip());
         System.out.println();
@@ -459,7 +493,14 @@ public final class Main {
 
         if (args.open) {
             try {
-                Path hintFile = HintFile.write(repo, id, level, note, result.text());
+                Path hintFile = mode.countsAsLevel()
+                        ? HintFile.write(repo, id, heading, note, result.text(),
+                                level.number() < 5
+                                        ? "下一档：`dojo hint` → L" + (level.number() + 1) + " · "
+                                                + Ladder.Level.of(level.number() + 1).name() + "\n"
+                                        : "最后一档。去写，然后 `dojo test`。\n")
+                        : HintFile.write(repo, id, mode.label(), note, result.text(),
+                                "（这类提示不计入档位；hints.md 未变）\n");
                 boolean opened = HintFile.openInIde(hintFile);
                 Ui.info("提示已写入 " + repo.root().relativize(hintFile)
                         + (opened ? "（已在 IDEA 里打开）" : "（在 IDEA 里双击打开即可）"));
@@ -468,11 +509,15 @@ public final class Main {
             }
         }
 
-        if (args.noSave) {
+        if (!mode.countsAsLevel()) {
+            saveSnapshot(snapshot, code);
+            Ui.info("（" + mode.label() + "不计入档位，hints.md 未变；改完直接 dojo test 或再 hint）");
+        } else if (args.noSave) {
             Ui.info("（--no-save：这一档没有写进 hints.md，下次还会从同一档继续）");
         } else {
             try {
-                Ladder.append(hintsFile, level, note, result.text());
+                Ladder.append(hintsFile, level, mode == HintMode.COUNTEREXAMPLE ? "反例" : level.name(), note,
+                        result.text());
                 List<Ladder.Turn> after = Ladder.readHistory(hintsFile);
                 saveSnapshot(snapshot, code);
                 if (level.number() < 5) {

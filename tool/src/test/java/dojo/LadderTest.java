@@ -112,4 +112,21 @@ class LadderTest {
                 List.of(), Ladder.Level.of(1), null, null);
         assertFalse(prompt.contains("【上次要提示之后你改了什么】"), prompt);
     }
+
+    @Test
+    void compileModeReplacesTheLadderInstruction() {
+        String prompt = Ladder.userPrompt("# 题", "class Solution {}", "cannot find symbol", List.of(),
+                Ladder.Level.of(1), null, null, HintMode.COMPILE);
+        assertTrue(prompt.contains("【这次不是阶梯提示，而是编译修复"), prompt);
+        assertTrue(prompt.contains("最小改法"), prompt);
+        assertTrue(prompt.contains("模式指令优先"), prompt);
+    }
+
+    @Test
+    void counterexampleModeStillAdvancesTheLadder() {
+        String prompt = Ladder.userPrompt("# 题", "class Solution {}", "expected: <2> but was: <1>", List.of(),
+                Ladder.Level.of(2), null, null, HintMode.COUNTEREXAMPLE);
+        assertTrue(prompt.contains("【这一档】L2 · 方向"), prompt);
+        assertTrue(prompt.contains("从哪一步开始偏"), prompt);
+    }
 }

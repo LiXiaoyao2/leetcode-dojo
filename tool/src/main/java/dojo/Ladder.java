@@ -121,13 +121,17 @@ public final class Ladder {
 
     /** 追加一档。只有模型真的回了内容才调用，失败不写。 */
     public static void append(Path hintsFile, Level level, String note, String text) {
+        append(hintsFile, level, level.name(), note, text);
+    }
+
+    public static void append(Path hintsFile, Level level, String name, String note, String text) {
         StringBuilder sb = new StringBuilder();
         if (!Files.isRegularFile(hintsFile)) {
             String id = hintsFile.getParent().getFileName().toString();
             sb.append("# 提示记录 · ").append(id).append("\n\n");
             sb.append("> 每次求提示自动追加；下一次请求会把这里的内容全部带上，避免重复。\n\n");
         }
-        sb.append("## L").append(level.number()).append(" · ").append(level.name()).append(" · ")
+        sb.append("## L").append(level.number()).append(" · ").append(name).append(" · ")
                 .append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
                 .append('\n');
         if (note != null && !note.isBlank()) {
@@ -145,12 +149,17 @@ public final class Ladder {
 
     public HintResult hint(String statement, String code, String testLog, List<Turn> history,
                            Level level, String note) {
-        return hint(statement, code, testLog, history, level, note, null);
+        return hint(statement, code, testLog, history, level, note, null, HintMode.LADDER);
     }
 
     public HintResult hint(String statement, String code, String testLog, List<Turn> history,
                            Level level, String note, String diff) {
-        String user = userPrompt(statement, code, testLog, history, level, note, diff);
+        return hint(statement, code, testLog, history, level, note, diff, HintMode.LADDER);
+    }
+
+    public HintResult hint(String statement, String code, String testLog, List<Turn> history,
+                           Level level, String note, String diff, HintMode mode) {
+        String user = userPrompt(statement, code, testLog, history, level, note, diff, mode);
         Ai.Reply reply = ai.complete(SYSTEM, user, level.budget());
 
         if (reply.truncated()) {
@@ -162,7 +171,7 @@ public final class Ladder {
         }
 
         boolean leak = false;
-        if (level.number() <= 4 && looksLikeJava(reply.text())) {
+        if (mode != HintMode.COMPILE && level.number() <= 4 && looksLikeJava(reply.text())) {
             String retryUser = user + "\n\n（提醒：上一次回复出现了完整可运行的 Java 代码，L" + level.number()
                     + " 不允许。重写这一档，只给「" + level.name() + "」该有的内容。）";
             Ai.Reply second = retry(retryUser, level.budget());
@@ -187,11 +196,16 @@ public final class Ladder {
 
     public static String userPrompt(String statement, String code, String testLog, List<Turn> history,
                                     Level level, String note) {
-        return userPrompt(statement, code, testLog, history, level, note, null);
+        return userPrompt(statement, code, testLog, history, level, note, null, HintMode.LADDER);
     }
 
     public static String userPrompt(String statement, String code, String testLog, List<Turn> history,
                                     Level level, String note, String diff) {
+        return userPrompt(statement, code, testLog, history, level, note, diff, HintMode.LADDER);
+    }
+
+    public static String userPrompt(String statement, String code, String testLog, List<Turn> history,
+                                    Level level, String note, String diff, HintMode mode) {
         StringBuilder sb = new StringBuilder();
         sb.append("【题目】\n").append(clip(statement, 9000)).append("\n\n");
         sb.append("【我当前的代码（行号是文件里的真实行号）】\n");
@@ -216,15 +230,36 @@ public final class Ladder {
                     .append("如果没改，就针对现状说，别假设他改了；如果这次改动让测试从绿变红（例如返回值形状、")
                     .append("循环边界被改坏），先用一句话指出改坏了什么，再讲这一档。\n\n");
         }
-        sb.append("【这一档】L").append(level.number()).append(" · ").append(level.name()).append('\n');
-        sb.append(instruction(level)).append("\n\n");
+        if (mode == HintMode.COMPILE || mode == HintMode.DEBUG) {
+            sb.append("【这次不是阶梯提示，而是").append(mode.label()).append("（不计入档位）】\n");
+            sb.append("模式指令优先于上面的阶梯定义、篇幅限制和「不许点具体位置」的规则。\n\n");
+        }
+        sb.append("【这一档】");
+        if (mode.countsAsLevel()) {
+            sb.append("L").append(level.number()).append(" · ").append(level.name());
+        } else {
+            sb.append(mode.label());
+        }
+        sb.append('\n');
+        sb.append(instruction(level, mode)).append("\n\n");
         sb.append("【我自己的卡点（没写就是「说不清哪里不对」）】\n")
                 .append(note == null || note.isBlank() ? "（没说）" : note.strip()).append("\n\n");
         sb.append("只输出这一档提示正文。");
         return sb.toString();
     }
 
-    private static String instruction(Level level) {
+    private static String instruction(Level level, HintMode mode) {
+        if (mode == HintMode.COMPILE) {
+            return "用 1–2 句话指出哪一行、错在哪、最小改法是什么；不要问题意、不要讲思路、不要贴整段代码。";
+        }
+        if (mode == HintMode.DEBUG) {
+            return "用 2–3 句话从测试输出里的栈帧定位到他的代码行（行号必须真实），说清为什么会抛、该检查什么；"
+                    + "不要贴修复后的整段代码。";
+        }
+        if (mode == HintMode.COUNTEREXAMPLE) {
+            return "先把失败输入、期望值、实际值摆出来（用测试输出里的原文），再用一句话问他从哪一步开始偏；"
+                    + "不要直接给答案。";
+        }
         return switch (level.number()) {
             case 1 -> "用 1–2 个具体问题把题意/边界对齐，不透露方向。";
             case 2 -> "点名模式，并解释它为什么适配这里的输入形状；不给步骤。";

@@ -21,8 +21,16 @@ public final class HintFile {
     }
 
     public static String render(String id, Ladder.Level level, String note, String text, LocalDateTime at) {
+        String next = level.number() < 5
+                ? "下一档：`dojo hint` → L" + (level.number() + 1) + " · " + Ladder.Level.of(level.number() + 1).name() + "\n"
+                : "最后一档。去写，然后 `dojo test`。\n";
+        return render(id, "L" + level.number() + " · " + level.name(), note, text, at, next);
+    }
+
+    public static String render(String id, String heading, String note, String text, LocalDateTime at,
+                                String nextLine) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# L").append(level.number()).append(" · ").append(level.name()).append("\n\n");
+        sb.append("# ").append(heading).append("\n\n");
         sb.append("> ").append(id).append(" · ").append(at.format(STAMP));
         if (note != null && !note.isBlank()) {
             sb.append(" · 卡点：").append(note.strip().replace("\n", " "));
@@ -30,20 +38,24 @@ public final class HintFile {
         sb.append("\n\n");
         sb.append(text.strip()).append("\n\n");
         sb.append("---\n\n");
-        if (level.number() < 5) {
-            sb.append("下一档：`dojo hint` → L").append(level.number() + 1)
-                    .append(" · ").append(Ladder.Level.of(level.number() + 1).name()).append('\n');
-        } else {
-            sb.append("最后一档。去写，然后 `dojo test`。\n");
-        }
+        sb.append(nextLine);
         return sb.toString();
     }
 
     public static Path write(Repo repo, String id, Ladder.Level level, String note, String text)
             throws IOException {
+        return write(repo, id, render(id, level, note, text, LocalDateTime.now()));
+    }
+
+    public static Path write(Repo repo, String id, String heading, String note, String text, String nextLine)
+            throws IOException {
+        return write(repo, id, render(id, heading, note, text, LocalDateTime.now(), nextLine));
+    }
+
+    private static Path write(Repo repo, String id, String content) throws IOException {
         Path file = path(repo, id);
         Files.createDirectories(file.getParent());
-        Files.writeString(file, render(id, level, note, text, LocalDateTime.now()), StandardCharsets.UTF_8);
+        Files.writeString(file, content, StandardCharsets.UTF_8);
         return file;
     }
 
