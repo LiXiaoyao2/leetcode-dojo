@@ -653,6 +653,9 @@ public final class Main {
     private static int test(Args args) {
         Repo repo = Repo.open();
         String id = repo.resolve(args.problem);
+        if (args.problem == null) {
+            Ui.info("没指定题，用最近改动的 " + id + "（-p 可以指定别的）。");
+        }
         String testClass = repo.testClass(id);
         Path testFile = repo.testFile(id);
         if (!Files.isRegularFile(testFile)) {
