@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dojo — 卡住的时候，给你下一档提示</title>
+<meta name="description" content="dojo 是一个在终端里跑、贴着 IDEA 用的 LeetCode 教练。按 L1–L5 五档，一次只推进一格。Java 21 + Maven，零运行时依赖。">
+<meta property="og:title" content="dojo — 卡住的时候，给你下一档提示">
+<meta property="og:description" content="不是答案，也不是鸡汤。按 L1–L5 五档，一次只推进一格。">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --bg:#0b0f0d;
+    --bg-soft:#101613;
+    --panel:#131b17;
+    --panel-2:#0f1613;
+    --line:#243129;
+    --line-soft:#1b2620;
+    --text:#e8e4d8;
+    --muted:#9aa79e;
+    --dim:#6f7d74;
+    --green:#8ce99a;
+    --green-deep:#40c463;
+    --amber:#f0b35a;
+    --red:#ff7b72;
+    --blue:#7ab8ff;
+    --serif:"Noto Serif SC","Songti SC","Source Han Serif SC","SimSun",serif;
+    --sans:"Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono","SFMono-Regular","Cascadia Code","Consolas","Liberation Mono",monospace;
+    --max:1120px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--sans);font-size:16px;line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(900px 500px at 12% -8%, rgba(64,196,99,.10), transparent 60%),
+      radial-gradient(700px 420px at 92% 4%, rgba(240,179,90,.06), transparent 60%);
+    background-repeat:no-repeat;
+  }
+  ::selection{background:rgba(140,233,154,.25);color:#fff}
+  a{color:var(--green);text-decoration:none}
+  a:hover{text-decoration:underline;text-underline-offset:3px}
+  .wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- nav ---------- */
+  header.nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    background:rgba(11,15,13,.78);
+    border-bottom:1px solid rgba(36,49,41,.7);
+  }
+  .nav-in{display:flex;align-items:center;gap:28px;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:17px;color:var(--text)}
+  .brand:hover{text-decoration:none}
+  .brand .mark{width:26px;height:26px;border:1.5px solid var(--green);border-radius:7px;display:grid;place-items:center;color:var(--green);font-size:13px;box-shadow:0 0 18px rgba(140,233,154,.18) inset}
+  .nav-links{display:flex;gap:22px;margin-left:auto;font-size:14px}
+  .nav-links a{color:var(--muted)}
+  .nav-links a:hover{color:var(--text);text-decoration:none}
+  .nav-cta{border:1px solid var(--line);padding:6px 14px;border-radius:8px;color:var(--text)!important;font-size:13px}
+  .nav-cta:hover{border-color:var(--green);background:rgba(140,233,154,.06)}
+  @media(max-width:840px){.nav-links a:not(.nav-cta){display:none}}
+
+  /* ---------- hero ---------- */
+  .hero{padding:88px 0 72px;position:relative;overflow:hidden}
+  .hero::after{
+    content:"道場";position:absolute;right:-30px;top:40px;
+    font-family:var(--serif);font-size:220px;line-height:1;
+    color:rgba(232,228,216,.028);letter-spacing:16px;pointer-events:none;user-select:none;
+  }
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;position:relative;z-index:1}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.12em;color:var(--green);text-transform:uppercase;margin:0 0 20px}
+  .eyebrow .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:9px;transform:translateY(-1px);box-shadow:0 0 10px var(--green)}
+  h1{
+    font-family:var(--serif);font-weight:700;font-size:clamp(38px,5vw,62px);
+    line-height:1.18;margin:0 0 22px;letter-spacing:.01em;
+  }
+  h1 .accent{color:var(--green);position:relative;white-space:nowrap}
+  h1 .accent::after{content:"";position:absolute;left:0;right:0;bottom:.06em;height:.32em;background:rgba(140,233,154,.13);z-index:-1;border-radius:2px}
+  .lede{color:var(--muted);font-size:17.5px;max-width:34em;margin:0 0 30px}
+  .lede strong{color:var(--text);font-weight:600}
+  .cta{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:26px}
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 22px;
+    border-radius:10px;font-size:15px;font-weight:600;transition:.18s;
+  }
+  .btn:hover{text-decoration:none;transform:translateY(-1px)}
+  .btn-primary{background:var(--green);color:#08110b;box-shadow:0 8px 30px rgba(64,196,99,.18)}
+  .btn-primary:hover{background:#a5f0b2}
+  .btn-ghost{border:1px solid var(--line);color:var(--text);background:rgba(255,255,255,.015)}
+  .btn-ghost:hover{border-color:var(--dim)}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+  .hero-meta span{display:flex;align-items:center;gap:7px}
+  .hero-meta b{color:var(--muted);font-weight:500}
+
+  /* terminal */
+  .term{
+    background:linear-gradient(180deg,#0e1512,#0b110e);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.02) inset;
+    font-family:var(--mono);font-size:12.8px;line-height:1.72;
+  }
+  .term-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line-soft);background:rgba(255,255,255,.018)}
+  .term-bar i{width:10px;height:10px;border-radius:50%;display:block}
+  .term-bar i:nth-child(1){background:#ff5f57}.term-bar i:nth-child(2){background:#febc2e}.term-bar i:nth-child(3){background:#28c840}
+  .term-bar span{margin-left:8px;color:var(--dim);font-size:11.5px}
+  .term-body{padding:20px 20px 22px;overflow-x:hidden}
+  .term-body .ln{white-space:pre-wrap;overflow-wrap:anywhere}
+  .p{color:var(--green)}
+  .c{color:#c9d1cb}
+  .o{color:var(--muted)}
+  .ok{color:var(--green)}
+  .bad{color:var(--red)}
+  .info{color:var(--blue)}
+  .amber{color:var(--amber)}
+  .gap{height:12px}
+  .hint{color:#d9d5c8;border-left:2px solid var(--line);padding-left:12px;margin:8px 0 0;white-space:pre-wrap}
+
+  @media(max-width:980px){
+    .hero{padding:60px 0 48px}
+    .hero-grid{grid-template-columns:1fr;gap:38px}
+    .hero::after{display:none}
+    .term{max-width:640px}
+  }
+
+  /* ---------- common sections ---------- */
+  section{padding:84px 0;border-top:1px solid var(--line-soft);position:relative}
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-bottom:42px}
+  .sec-kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--green);text-transform:uppercase;margin:0 0 12px}
+  h2{font-family:var(--serif);font-size:clamp(28px,3.4vw,40px);line-height:1.3;margin:0;font-weight:700;letter-spacing:.005em}
+  .sec-desc{color:var(--muted);max-width:36em;margin:14px 0 0;font-size:15.5px}
+  .sec-index{font-family:var(--serif);font-size:64px;line-height:1;color:rgba(232,228,216,.06);font-weight:700;user-select:none}
+  @media(max-width:760px){.sec-index{display:none}}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid var(--line-soft);border-radius:12px;padding:26px 24px;transition:.2s}
+  .card:hover{border-color:var(--line);background:rgba(255,255,255,.03)}
+  .card .tag{font-family:var(--mono);font-size:11.5px;color:var(--green);letter-spacing:.06em;margin-bottom:12px;display:block}
+  .card h3{font-size:17px;margin:0 0 9px;font-weight:650}
+  .card p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.7}
+  .card p + p{margin-top:8px}
+  @media(max-width:900px){.cards{grid-template-columns:1fr 1fr}}
+  @media(max-width:620px){.cards{grid-template-columns:1fr}}
+
+  /* quote / callout */
+  .callout{border-left:3px solid var(--green);background:rgba(140,233,154,.045);padding:18px 22px;border-radius:0 10px 10px 0;color:var(--muted);font-size:15px;margin:26px 0}
+  .callout strong{color:var(--text)}
+
+  /* comparison table */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.012)}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:680px}
+  th,td{text-align:left;padding:13px 18px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.07em;color:var(--dim);font-weight:500;text-transform:uppercase;background:rgba(255,255,255,.02)}
+  td:first-child{color:var(--muted);white-space:nowrap}
+  td.dojo{color:var(--text)}
+  td.dojo strong{color:var(--green);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:rgba(255,255,255,.017)}
+
+  /* ---------- ladder ---------- */
+  .ladder-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .ladder-tabs button{
+    appearance:none;background:transparent;border:1px solid var(--line);
+    color:var(--muted);font-family:var(--mono);font-size:13px;
+    padding:9px 16px;border-radius:9px;cursor:pointer;transition:.16s;
+  }
+  .ladder-tabs button:hover{color:var(--text);border-color:var(--dim)}
+  .ladder-tabs button[aria-selected="true"]{background:rgba(140,233,154,.10);border-color:rgba(140,233,154,.5);color:var(--green)}
+  .ladder-tabs button b{font-weight:700;margin-right:5px}
+  .ladder-panel{
+    display:grid;grid-template-columns:1.2fr .8fr;gap:0;
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel-2);
+  }
+  .ladder-main{padding:34px 36px;border-right:1px solid var(--line-soft)}
+  .ladder-main .lvl{font-family:var(--mono);font-size:12px;color:var(--green);letter-spacing:.1em;margin-bottom:10px}
+  .ladder-main h3{font-family:var(--serif);font-size:30px;margin:0 0 6px;font-weight:700}
+  .ladder-main .role{color:var(--muted);font-size:15.5px;margin:0 0 22px}
+  .ladder-main .sample{
+    font-family:var(--mono);font-size:13px;line-height:1.8;color:#c9d1cb;
+    background:#0a100d;border:1px solid var(--line-soft);border-radius:9px;padding:16px 18px;
+    white-space:pre-wrap;
+  }
+  .ladder-side{display:grid;grid-template-rows:1fr 1fr;background:rgba(255,255,255,.012)}
+  .ladder-side div{padding:24px 28px}
+  .ladder-side div:first-child{border-bottom:1px solid var(--line-soft)}
+  .ladder-side h4{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--dim);margin:0 0 8px;text-transform:uppercase;font-weight:500}
+  .ladder-side p{margin:0;font-size:14px;color:var(--text);line-height:1.7}
+  .ladder-side .no{color:var(--muted)}
+  .ladder-note{display:flex;flex-wrap:wrap;gap:24px;margin-top:20px;font-size:13.5px;color:var(--dim)}
+  .ladder-note code{color:var(--amber);font-family:var(--mono);font-size:12.5px}
+  @media(max-width:820px){
+    .ladder-panel{grid-template-columns:1fr}
+    .ladder-main{border-right:none;border-bottom:1px solid var(--line-soft);padding:26px 22px}
+    .ladder-side div{padding:20px 22px}
+  }
+
+  /* branch cards */
+  .branch{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+  .branch .card{padding:22px}
+  .branch .card .k{font-family:var(--mono);font-size:12px;color:var(--amber);margin-bottom:8px}
+  .branch .card h4{font-size:16px;margin:0 0 8px}
+  .branch .card p{font-size:14px}
+  @media(max-width:820px){.branch{grid-template-columns:1fr}}
+
+  /* learn */
+  .learn-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  .learn-grid h3{font-size:20px;margin:0 0 10px;font-family:var(--serif)}
+  .learn-grid p{color:var(--muted);font-size:14.8px;margin:0 0 16px}
+  .learn-grid p strong{color:var(--text)}
+  .codeblock{
+    position:relative;background:#0a100d;border:1px solid var(--line-soft);border-radius:10px;
+    font-family:var(--mono);font-size:12.8px;line-height:1.75;overflow:hidden;
+  }
+  .codeblock pre{margin:0;padding:18px 20px;overflow-x:auto;color:#c9d1cb;white-space:pre}
+  #install{white-space:pre-wrap;overflow-wrap:anywhere}
+  .codeblock .copier{
+    position:absolute;top:9px;right:9px;background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--dim);font-family:var(--mono);font-size:10.5px;padding:4px 8px;border-radius:6px;cursor:pointer;
+  }
+  .codeblock .copier:hover{color:var(--text);border-color:var(--dim)}
+  .codeblock .cap{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line-soft);color:var(--dim);font-size:11px;letter-spacing:.06em}
+  .codeblock .cap .dots{display:flex;gap:5px}
+  .codeblock .cap .dots i{width:8px;height:8px;border-radius:50%;background:#2a3630;display:block}
+  @media(max-width:860px){.learn-grid{grid-template-columns:1fr}}
+
+  /* screenshots */
+  .shots{columns:2;column-gap:18px}
+  .shot{display:block;break-inside:avoid;margin:0 0 18px;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;cursor:zoom-in;transition:.2s}
+  .shot:hover{border-color:var(--line);transform:translateY(-2px)}
+  .shot img{display:block;width:100%;height:auto}
+  .shot figcaption{display:flex;gap:10px;align-items:baseline;padding:13px 16px;font-size:13px;color:var(--muted);border-top:1px solid var(--line-soft)}
+  .shot figcaption b{font-family:var(--mono);color:var(--green);font-size:11px;font-weight:500;white-space:nowrap}
+  @media(max-width:760px){.shots{columns:1}}
+
+  /* quickstart */
+  .start-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:26px;align-items:start}
+  .start-grid h3{font-size:18px;margin:0 0 12px}
+  .steps{counter-reset:s;list-style:none;margin:0;padding:0}
+  .steps li{counter-increment:s;position:relative;padding:0 0 18px 40px;color:var(--muted);font-size:14.5px}
+  .steps li::before{
+    content:counter(s);position:absolute;left:0;top:2px;width:24px;height:24px;border-radius:50%;
+    border:1px solid var(--line);display:grid;place-items:center;font-family:var(--mono);font-size:11.5px;color:var(--green);
+  }
+  .steps li b{color:var(--text);font-weight:600}
+  .steps li code{font-family:var(--mono);font-size:12.5px;color:var(--amber);background:rgba(240,179,90,.07);padding:1px 6px;border-radius:4px}
+  .idea-card{border:1px solid var(--line);border-radius:12px;padding:24px;background:linear-gradient(180deg,rgba(255,255,255,.025),transparent)}
+  .idea-card h3{margin-top:0}
+  .idea-card p{color:var(--muted);font-size:14px;margin:0 0 14px}
+  .keys{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+  .keyrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--muted)}
+  kbd{
+    font-family:var(--mono);font-size:11.5px;color:var(--text);background:#0a100d;
+    border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:3px 8px;white-space:nowrap;
+  }
+  @media(max-width:860px){.start-grid{grid-template-columns:1fr}}
+
+  /* commands */
+  .cmd-table td:first-child{white-space:nowrap;font-family:var(--mono);font-size:12.5px;color:var(--green)}
+  .cmd-table td:first-child .arg{color:var(--dim)}
+  .cmd-table td{font-size:14px}
+
+  /* eval */
+  .eval-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:34px;align-items:start}
+  .bars{display:flex;flex-direction:column;gap:18px;margin:4px 0 0}
+  .bar-row .lab{display:flex;justify-content:space-between;font-size:13.5px;color:var(--muted);margin-bottom:7px}
+  .bar-row .lab b{font-family:var(--mono);color:var(--text);font-weight:600}
+  .track{height:9px;background:#0a100d;border:1px solid var(--line-soft);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#40c463,#8ce99a)}
+  .fill.warn{background:linear-gradient(90deg,#a8641c,#f0b35a)}
+  .fill.bad{background:linear-gradient(90deg,#8a4b2a,#d98a5f)}
+  .bar-row .sub{font-size:11.8px;color:var(--dim);margin-top:6px;font-family:var(--mono)}
+  .metric-list{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:26px}
+  .metric{border:1px solid var(--line-soft);border-radius:10px;padding:15px 17px;background:rgba(255,255,255,.015)}
+  .metric .v{font-family:var(--mono);font-size:21px;color:var(--text);line-height:1.2}
+  .metric .v small{font-size:12px;color:var(--dim);margin-left:3px}
+  .metric .l{font-size:12.5px;color:var(--dim);margin-top:4px}
+  .eval-table{font-size:13.5px;min-width:0}
+  .eval-table th,.eval-table td{padding:11px 13px}
+  .eval-table td:first-child{white-space:normal;color:var(--muted)}
+  .eval-table .best{color:var(--green)}
+  @media(max-width:920px){.eval-grid{grid-template-columns:1fr}}
+
+  /* architecture */
+  .arch-grid{display:grid;grid-template-columns:.95fr 1.05fr;gap:34px;align-items:start}
+  .ascii{
+    background:#0a100d;border:1px solid var(--line-soft);border-radius:12px;
+    padding:22px 18px;font-family:var(--mono);font-size:11.4px;line-height:1.9;color:#b8c4bc;
+    overflow-x:auto;white-space:pre;
+  }
+  .ascii .g{color:var(--green)}
+  .ascii .d{color:var(--dim)}
+  .qa{display:flex;flex-direction:column;gap:14px}
+  .qa-item{border:1px solid var(--line-soft);border-radius:10px;padding:18px 20px;transition:.18s;background:rgba(255,255,255,.012)}
+  .qa-item:hover{border-color:var(--line);background:rgba(255,255,255,.025)}
+  .qa-item .n{font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:.08em}
+  .qa-item h4{margin:5px 0 5px;font-size:15.5px;font-weight:600}
+  .qa-item p{margin:0;color:var(--muted);font-size:14px}
+  .qa-item a{font-size:12.5px;font-family:var(--mono);color:var(--dim)}
+  .qa-item a:hover{color:var(--green)}
+  @media(max-width:900px){.arch-grid{grid-template-columns:1fr}}
+
+  /* limits */
+  .limit-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:36px;align-items:start}
+  .limit-list{list-style:none;margin:0;padding:0}
+  .limit-list li{position:relative;padding:11px 0 11px 24px;border-bottom:1px solid var(--line-soft);color:var(--muted);font-size:14.3px}
+  .limit-list li:last-child{border-bottom:none}
+  .limit-list li::before{content:"—";position:absolute;left:0;color:var(--dim);font-family:var(--mono)}
+  .limit-list b{color:var(--text);font-weight:600}
+  .tradeoff{min-width:0}
+  .tradeoff th,.tradeoff td{padding:10px 12px;font-size:13px}
+  .tradeoff td:first-child{white-space:normal}
+  @media(max-width:900px){.limit-grid{grid-template-columns:1fr}}
+
+  /* footer */
+  footer{border-top:1px solid var(--line-soft);padding:64px 0 46px;text-align:center;position:relative;overflow:hidden}
+  footer .big{font-family:var(--serif);font-size:clamp(24px,3.4vw,36px);font-weight:700;line-height:1.4;margin:0 0 14px}
+  footer .big span{color:var(--green)}
+  footer .sub{color:var(--dim);font-size:13.5px;margin:0 0 26px}
+  footer .flinks{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;font-size:13.5px}
+  footer .flinks a{color:var(--muted)}
+  footer .flinks a:hover{color:var(--text)}
+  .copyright{margin-top:28px;font-family:var(--mono);font-size:11.5px;color:#4d5a52;letter-spacing:.04em}
+
+  /* lightbox */
+  .lb{position:fixed;inset:0;z-index:100;background:rgba(4,7,5,.92);display:none;align-items:center;justify-content:center;padding:36px;cursor:zoom-out;backdrop-filter:blur(6px)}
+  .lb.open{display:flex}
+  .lb img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 30px 100px rgba(0,0,0,.7)}
+  .lb .close{position:absolute;top:20px;right:26px;color:var(--muted);font-family:var(--mono);font-size:12px;border:1px solid var(--line);background:transparent;border-radius:7px;padding:6px 12px;cursor:pointer}
+
+  /* reveal */
+  .reveal{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){
+    .reveal{opacity:1;transform:none;transition:none}
+    html{scroll-behavior:auto}
+  }
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);opacity:0;pointer-events:none;
+    background:#18221c;border:1px solid var(--line);color:var(--text);font-size:13px;padding:9px 16px;border-radius:8px;
+    transition:.25s;z-index:120;font-family:var(--mono);
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><span class="mark">道</span>dojo</a>
+    <nav class="nav-links">
+      <a href="#why">为什么</a>
+      <a href="#ladder">五档阶梯</a>
+      <a href="#learn">下一步</a>
+      <a href="#start">上手</a>
+      <a href="#eval">评测</a>
+      <a href="#arch">架构</a>
+      <a class="nav-cta" href="https://github.com/LiXiaoyao2/leetcode-dojo" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- HERO -->
+<section class="hero" style="border-top:none">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow"><span class="dot"></span>Java 21 · Maven · 零运行时依赖</p>
+      <h1>卡住的时候，<br>给你<span class="accent">下一档</span>提示</h1>
+      <p class="lede">不是答案，也不是鸡汤。在 IDEA 里刷 LeetCode：题面、代码、测试、提示，都在一个普通 Maven 工程里。按 <strong>L1–L5</strong> 五档，一次只推进一格。</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#start">60 秒上手 →</a>
+        <a class="btn btn-ghost" href="https://github.com/LiXiaoyao2/leetcode-dojo" target="_blank" rel="noopener">看源码</a>
+      </div>
+      <div class="hero-meta">
+        <span><b>118</b> 个 @Test</span>
+        <span><b>24</b> 个模式索引</span>
+        <span><b>20×3×5</b> 提示评测</span>
+        <span><b>MIT</b></span>
+      </div>
+    </div>
+
+    <div class="term reveal">
+      <div class="term-bar"><i></i><i></i><i></i><span>~/code/leetcode-dojo — dojo</span></div>
+      <div class="term-body">
+<div class="ln"><span class="p">$</span> <span class="c">dojo new 146</span></div>
+<div class="ln o">→ 从 leetcode.cn 拉取 146. LRU 缓存 …</div>
+<div class="ln o">  146  LRU 缓存 · 中等 · 设计 / 哈希表 / 链表</div>
+<div class="ln ok">✓ 已就绪：0146-lru-cache</div>
+<div class="gap"></div>
+<div class="ln"><span class="p">$</span> <span class="c">dojo test</span></div>
+<div class="ln bad">✗ 没通过 · 0.8 s</div>
+<div class="ln o">  LRUCacheTest.officialExample1:23 »</div>
+<div class="ln o">  期望 [null, null, 1, null, -1]</div>
+<div class="ln o">  实际 [null, null, -1, null, -1]</div>
+<div class="gap"></div>
+<div class="ln"><span class="p">$</span> <span class="c">dojo hint</span></div>
+<div class="ln o">→ 请求 L1 · 澄清（deepseek-v4.1-flash）…</div>
+<div class="gap"></div>
+<div class="hint"><span class="ok">L1 · 澄清</span>
+
+你说 put(1, 1) 之后 get(1) 拿到了 -1。先别管淘汰策略——
+你的 put 是在 get 之前就动了链表，还是在之后？
+容量为 1 时，put 一个不存在的 key，中间会不会先发生一次淘汰？</div>
+<div class="gap"></div>
+<div class="ln o">12.3 s · deepseek-v4.1-flash</div>
+<div class="ln o">下一档：dojo hint → L2 · 方向（现在共 1 档）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section id="why">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">01 / 为什么会有这个东西</p>
+        <h2>把外围删了，只留一条主线：<br>把提示做准</h2>
+        <p class="sec-desc">上一版是一个带 Web 页面、数据库、爬虫、星级和设置页的刷题平台。功能齐全，但卡住的人拿到的经常是一段正确但没用的废话。这一版只保留一条主线。</p>
+      </div>
+      <div class="sec-index">01</div>
+    </div>
+
+    <div class="cards">
+      <div class="card reveal">
+        <span class="tag">ONE CALL</span>
+        <h3>一次调用</h3>
+        <p>模型同时看到题面、你磁盘上的真实代码（带行号）、最近一次测试输出、已经给过的提示，一次给出下一档。</p>
+        <p>没有「诊断器 → 引导器」的二次转述损耗。</p>
+      </div>
+      <div class="card reveal">
+        <span class="tag">REAL LADDER</span>
+        <h3>阶梯是真的阶梯</h3>
+        <p>L1 只问边界，L2 只指方向，L3 给一个洞察，L4 给步骤骨架，L5 才是完整题解。</p>
+        <p>想直接要答案就 <code class="mono" style="color:var(--amber)">dojo hint 5</code>，默认永远只推进一格。</p>
+      </div>
+      <div class="card reveal">
+        <span class="tag">NO REPEAT</span>
+        <h3>不重复，也不装死</h3>
+        <p>已给的提示原样进上下文，一句都不许重复，且必须承接上一档；越界给代码或超长会被自动重问。</p>
+        <p>仍然不行就原文照发 + 一行警示，绝不偷偷换成罐头文案。</p>
+      </div>
+    </div>
+
+    <div class="table-wrap reveal" style="margin-top:30px">
+      <table>
+        <thead>
+          <tr><th></th><th>常见做法</th><th>dojo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>提示形态</td><td>一问一答，直接给思路或代码</td><td class="dojo"><strong>五档阶梯</strong>，每次只给下一档，越级要显式要</td></tr>
+          <tr><td>上下文</td><td>题面 + 你粘进网页的代码</td><td class="dojo">题面 + <strong>磁盘上的真实文件</strong>（带行号）+ 最近一次 JUnit 输出</td></tr>
+          <tr><td>写题环境</td><td>网页 / 插件面板 / 独立编辑器</td><td class="dojo"><strong>你自己的 IDEA</strong> + 一个普通 Maven 模块</td></tr>
+          <tr><td>数据</td><td>云端账号、数据库</td><td class="dojo"><strong>纯文件</strong>：problem.md、hints.md、done</td></tr>
+          <tr><td>卡住的原因</td><td>一律当「不会做」</td><td class="dojo">编译错 / 抛异常 / 断言挂 / 思路没到，<strong>走不同分支</strong></td></tr>
+          <tr><td>样例过了</td><td>默认你会了</td><td class="dojo"><code class="mono">dojo stress</code> 随机对拍，出错给 seed 复现</td></tr>
+          <tr><td>看懂了</td><td>没有下一步</td><td class="dojo"><code class="mono">dojo fade</code> 挖空 3–5 行，补完再跑测试</td></tr>
+          <tr><td>效果</td><td>「感觉挺准」</td><td class="dojo"><code class="mono">eval/</code> 20 题 × 3 架构 × 5 档，<strong>指标可复算</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- LADDER -->
+<section id="ladder">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">02 / 五档阶梯</p>
+        <h2>每一档，只给你现在<br>用得上的那一点</h2>
+        <p class="sec-desc">档位状态不存数据库：数 hints.md 里有多少个 <span class="mono" style="color:var(--amber);font-size:13.5px">## L3 · 洞察</span> 小节，就知道你走到哪了。删掉最后一节就等于退回上一档，手改也认。</p>
+      </div>
+      <div class="sec-index">02</div>
+    </div>
+
+    <div class="ladder-tabs" role="tablist" aria-label="五档阶梯">
+      <button role="tab" id="tab-l1" aria-controls="ladder-panel" aria-selected="true" data-level="1"><b>L1</b>澄清</button>
+      <button role="tab" id="tab-l2" aria-controls="ladder-panel" aria-selected="false" data-level="2"><b>L2</b>方向</button>
+      <button role="tab" id="tab-l3" aria-controls="ladder-panel" aria-selected="false" data-level="3"><b>L3</b>洞察</button>
+      <button role="tab" id="tab-l4" aria-controls="ladder-panel" aria-selected="false" data-level="4"><b>L4</b>骨架</button>
+      <button role="tab" id="tab-l5" aria-controls="ladder-panel" aria-selected="false" data-level="5"><b>L5</b>题解</button>
+    </div>
+
+    <div class="ladder-panel reveal" id="ladder-panel" role="tabpanel" aria-labelledby="tab-l1">
+      <div class="ladder-main">
+        <div class="lvl" id="lv-code">LEVEL 1 / 5</div>
+        <h3 id="lv-name">澄清</h3>
+        <p class="role" id="lv-role">1–2 个能一句话回答的问题：边界、返回约定、你的代码与题面的偏差。</p>
+        <div class="sample" id="lv-sample">你说 put(1, 1) 之后 get(1) 拿到了 -1。
+先别管淘汰策略——你的 put 是在 get 之前
+就动了链表，还是在之后？</div>
+      </div>
+      <div class="ladder-side">
+        <div>
+          <h4>给什么</h4>
+          <p id="lv-give">只给问题，不给方向暗示。</p>
+        </div>
+        <div>
+          <h4>篇幅 / 禁区</h4>
+          <p class="no" id="lv-limit">≤ 120 字 · 禁止出现任何方向暗示</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ladder-note">
+      <span>档位规则全部写在 <span class="mono" style="color:var(--text)">Ladder.SYSTEM</span> 里</span>
+      <span><code>dojo prompt 3</code> 原样打印请求，不发请求</span>
+      <span><code>dojo hint --force</code> 强行越档</span>
+    </div>
+  </div>
+</section>
+
+<!-- BRANCHES -->
+<section id="branches">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">03 / 卡住也分种类</p>
+        <h2>你卡的不是思路，<br>就别浪费一档</h2>
+        <p class="sec-desc">阶梯是给「思路没到那一步」用的。另一些时刻，卡住的是编译、异常或断言——这时再走阶梯反而浪费一档。判断依据是最近一次测试输出，dojo hint 自己看，不用你声明。</p>
+      </div>
+      <div class="sec-index">03</div>
+    </div>
+
+    <div class="branch">
+      <div class="card reveal">
+        <div class="k">编译不过 → 编译修复</div>
+        <h4>直接点出哪一行、错在哪、最小改法。</h4>
+        <p>不写进 hints.md，不消耗档位。修完还能回到原来的档位继续。</p>
+      </div>
+      <div class="card reveal">
+        <div class="k">抛异常 → 定位</div>
+        <h4>从栈帧落到你的代码行。</h4>
+        <p>解释为什么抛、该检查什么，而不是甩一段「请检查空指针」。</p>
+      </div>
+      <div class="card reveal">
+        <div class="k">断言挂了 → 反例</div>
+        <h4>先摆失败输入 / 期望 / 实际。</h4>
+        <p>再问「从哪一步开始偏」。这一档算 L(n)，因为它确实给了信息。</p>
+      </div>
+    </div>
+
+    <div class="callout reveal">
+      <strong>它还会拦「连点」。</strong>代码一个字没动、也没有新的测试结果时，<span class="mono" style="font-size:13px;color:var(--amber)">dojo hint</span> 会拒绝推进档位——先按上一档改一次，或者加 <span class="mono" style="font-size:13px;color:var(--amber)">--force</span> 强行要。
+    </div>
+  </div>
+</section>
+
+<!-- LEARN -->
+<section id="learn">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">04 / 学习资料</p>
+        <h2>不给你读物，<br>给你下一步</h2>
+        <p class="sec-desc">L4 之后多出三行。这一步过不去，通常只有三种原因，三条出口对应三种：根本没写过这个模式（先去练一道更简单的）、见过但写不出来（看一份 20 行模板）、已经不想再耗（直接要答案，不丢人）。</p>
+      </div>
+      <div class="sec-index">04</div>
+    </div>
+
+    <div class="learn-grid">
+      <div class="reveal">
+        <h3>dojo learn — 24 个模式的本地索引</h3>
+        <p>索引本身是仓库里的 <span class="mono" style="color:var(--amber);font-size:13px">resources/patterns.md</span>，可以 review、可以提 PR；<span class="mono" style="color:var(--amber);font-size:13px">dojo learn --check</span> 会逐条查字段和 47 条外链。<strong>模型只负责输出一个受控的 PATTERN: &lt;id&gt;</strong>——模板、题号、链接一个字都不是它编的。</p>
+        <div class="codeblock">
+          <div class="cap"><span class="dots"><i></i><i></i><i></i></span><span>dojo learn monotonic-stack</span></div>
+          <pre><span class="g">单调栈 · monotonic-stack</span>
+本质  维护一个「还没被后面元素打败」的候选序列
+信号  · 要求「下一个更大/更小」
+      · 需要 O(n) 找左右边界
+      · 暴力枚举区间会退化
+子技能 下一个更大元素 / 循环数组 / 柱状图面积
+
+模板（resources/snippets/monotonic-stack.java）
+│ Deque&lt;Integer&gt; st = new ArrayDeque&lt;&gt;();
+│ for (int i = 0; i &lt; a.length; i++) {
+│     while (!st.isEmpty() &amp;&amp; a[st.peek()] &lt; a[i]) { ... }
+│     st.push(i);
+│ }
+
+先练  496 下一个更大元素 I
+巩固  739 · 84
+延伸  https://oi-wiki.org/ds/monotonous-stack/
+易错  · 弹栈条件写反 / 栈里存下标还是存值 / 相等元素是否弹出</pre>
+        </div>
+      </div>
+
+      <div class="reveal">
+        <h3>dojo fade — 把答案挖空，补完就绿</h3>
+        <p>看懂 L5 和能自己写出来是两件事。<span class="mono" style="color:var(--amber);font-size:13px">dojo fade</span> 从最近一次 L5 里挑 <strong>3–5 个逻辑行</strong>（return、数组/字段更新、库调用）挖成 TODO，循环头和 if 条件一律不动——动它们只会留下看不懂的编译错误。原文件备份到 <span class="mono" style="font-size:12.5px">problems/&lt;id&gt;/solution-full.java</span>。</p>
+        <div class="codeblock">
+          <div class="cap"><span class="dots"><i></i><i></i><i></i></span><span>dojo fade</span></div>
+          <pre><span class="g">$ dojo fade</span>
+✓ 已挖掉 3 行 → solutions/src/main/java/p0001_two_sum/Solution.java
+补全这几行，然后 <span class="amber">dojo test</span>；全绿就说明这一版你真的会了。
+对照原文：<span class="amber">dojo fade --show</span>    放弃：<span class="amber">dojo fade --restore</span>
+
+<span class="o"># 挖空后 test 会先报「缺少返回语句」，
+# 补完才跑断言；--restore 一键还原。</span></pre>
+        </div>
+        <p style="margin-top:14px">这比「再看一遍题解」有用，也比从空白文件重写温和——门槛刚好落在「需要你自己想，但不用重新搭架子」。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section id="shots">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">05 / 真实终端</p>
+        <h2>同一台机器上的<br>一次完整会话</h2>
+        <p class="sec-desc">图 1 来自全新 clone，图 2–4 是同一次会话：test 红 → hint → 改对 → test 绿。命令、模型回复、耗时、失败行号都没有改字，只把终端换成了截图样式。</p>
+      </div>
+      <div class="sec-index">05</div>
+    </div>
+
+    <div class="shots">
+      <figure class="shot reveal">
+        <img src="assets/step-1-new.png" alt="dojo new 1 拉取题面、解法模板和官方样例测试" loading="lazy">
+        <figcaption><b>01</b>dojo new 1 — 题面、模板、测试一次就绪</figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <img src="assets/step-2-test-hint.png" alt="dojo test 失败后 dojo hint 给出 L1 澄清" loading="lazy">
+        <figcaption><b>02</b>test 红 → hint 给 L1，先问边界</figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <img src="assets/step-3-next-step.png" alt="dojo hint 4 给出 L4 骨架和三选一出口" loading="lazy">
+        <figcaption><b>03</b>L4 骨架 + 三选一的下一步</figcaption>
+      </figure>
+      <figure class="shot reveal">
+        <img src="assets/step-4-green.png" alt="补完解法后 dojo test 全绿，dojo status 打勾" loading="lazy">
+        <figcaption><b>04</b>改对 → test 绿 → status 打勾</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- START -->
+<section id="start">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">06 / 60 秒上手</p>
+        <h2>一个 Maven 工程，<br>和一条命令行</h2>
+        <p class="sec-desc">需要 JDK 21、Maven 3.9+，以及一个 Anthropic / OpenAI 兼容的模型网关。不需要数据库、账号或常驻服务。</p>
+      </div>
+      <div class="sec-index">06</div>
+    </div>
+
+    <div class="start-grid">
+      <div class="reveal">
+        <div class="codeblock">
+          <div class="cap"><span class="dots"><i></i><i></i><i></i></span><span>安装</span><button class="copier" data-copy="install">复制</button></div>
+          <pre id="install">git clone https://github.com/LiXiaoyao2/leetcode-dojo.git ~/code/leetcode-dojo
+ln -sfn ~/code/leetcode-dojo/bin/dojo ~/.local/bin/dojo
+dojo doctor</pre>
+        </div>
+        <ol class="steps" style="margin-top:26px">
+          <li>用 <code>dojo new 1</code> 拉题，也认 <code>lru-cache</code> 和 leetcode.cn 完整链接；<code>dojo new 1-100</code> 可以一次铺开一个区间（最多 300 道）。</li>
+          <li>在 IDEA 里只改一个文件。<b>卡住时</b>敲 <code>dojo test</code>，再敲 <code>dojo hint</code>，每次只推进一格。</li>
+          <li>做完了 <code>dojo done</code> 打勾；<code>dojo status</code> 随时看每道题拿了哪几档。</li>
+          <li>样例全绿再跑一次 <code>dojo stress</code>，用随机输入对拍——样例过了，不代表对了。</li>
+        </ol>
+      </div>
+
+      <div class="idea-card reveal">
+        <h3>不想切出 IDEA</h3>
+        <p>把 <span class="mono" style="color:var(--amber);font-size:13px">dojo hint --open</span> 绑成 External Tool + 快捷键后，光标停在 Solution.java 里按一次键：提示直接进 Run 窗口，并同时打开 <span class="mono" style="font-size:12.5px">problems/&lt;id&gt;/last-hint.md</span>。</p>
+        <div class="keys">
+          <div class="keyrow"><span>要下一档提示</span><kbd>Alt + Shift + H</kbd></div>
+          <div class="keyrow"><span>跑官方样例</span><kbd>Alt + Shift + T</kbd></div>
+        </div>
+        <p style="margin-bottom:0">逐步配置见 <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/docs/idea.md" target="_blank" rel="noopener">docs/idea.md</a>。</p>
+        <div class="callout" style="margin:18px 0 0;font-size:13.5px">首次运行会按需用 Maven 把工具编成单个 jar（几秒），之后走缓存。软链之后，在任意目录都能直接敲 <span class="mono" style="color:var(--amber)">dojo</span>。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<section id="commands">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">07 / 命令</p>
+        <h2>一张表，<br>就是全部入口</h2>
+        <p class="sec-desc">通用选项：<span class="mono" style="color:var(--amber);font-size:13px">--problem/-p</span> 指定题目，<span class="mono" style="color:var(--amber);font-size:13px">--note/-n</span> 附卡点，<span class="mono" style="color:var(--amber);font-size:13px">--no-save</span> 不写档位。完整清单见 <span class="mono" style="color:var(--text);font-size:13px">dojo help</span>。</p>
+      </div>
+      <div class="sec-index">07</div>
+    </div>
+
+    <div class="table-wrap reveal">
+      <table class="cmd-table">
+        <thead><tr><th>命令</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td>dojo new <span class="arg">&lt;题号|slug|链接&gt;</span></td><td>拉题面 + 解法模板 + 官方样例测试；<span class="mono">a-b</span> 批量拉区间</td></tr>
+          <tr><td>dojo hint <span class="arg">[1-5] [卡点]</span></td><td>要下一档提示；代码比上次测试新会先自动跑一遍；带「上次之后改了什么」的 diff</td></tr>
+          <tr><td>dojo test</td><td>跑这道题的 JUnit 测试，摘要写入 <span class="mono">.dojo/last-test.log</span></td></tr>
+          <tr><td>dojo stress</td><td>随机对拍：模型写暴力解并先过官方样例，再用几百组随机输入和你的解比结果</td></tr>
+          <tr><td>dojo learn <span class="arg">[模式]</span></td><td>查 24 个模式的识别信号、模板、前置题、巩固题；<span class="mono">--check</span> 校验字段与外链</td></tr>
+          <tr><td>dojo fade <span class="arg">[--lines N]</span></td><td>把最近一次 L5 挖空 3–5 行，补完跑测试；<span class="mono">--show</span> 对照、<span class="mono">--restore</span> 还原</td></tr>
+          <tr><td>dojo status</td><td>所有题的目标、最高档位、是否完成</td></tr>
+          <tr><td>dojo done</td><td>标记完成</td></tr>
+          <tr><td>dojo prompt <span class="arg">[1-5]</span></td><td>只打印将要发给模型的完整请求，不发请求</td></tr>
+          <tr><td>dojo doctor</td><td>环境、PATH、配置来源、网关 ping</td></tr>
+          <tr><td>dojo clean <span class="arg">[题号|--all]</span></td><td>清构建产物；带题号则把这道题移进系统回收站</td></tr>
+          <tr><td>dojo eval</td><td>开发用：跑提示质量评测（20 题 × 3 架构 × 5 档）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- STRESS / TESTGEN -->
+<section id="quality">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">08 / 两道闸</p>
+        <h2>样例过了，不代表对了；<br>测试也不让模型写</h2>
+        <p class="sec-desc">一个负责找错，一个负责不制造错。两者都不相信「看起来对」。</p>
+      </div>
+      <div class="sec-index">08</div>
+    </div>
+
+    <div class="cards" style="grid-template-columns:1fr 1fr">
+      <div class="card reveal">
+        <span class="tag">STRESS · 随机对拍</span>
+        <h3>用别人的错误，照出自己的边界</h3>
+        <p>官方样例是别人的用例，专挑你没想到的输入才有用。生成本身也有闸：<strong>暴力解必须先过官方样例</strong>，一旦不绿直接丢弃——不能拿一个错的对照来判你的解错。</p>
+        <p>失败信息带 seed：<span class="mono" style="color:var(--amber);font-size:12.5px">seed=18 root=[-1, null, 7, -1] expected=false actual=true</span>，敲一遍 <span class="mono" style="color:var(--amber);font-size:12.5px">dojo stress --cases 1 --seed 18</span> 就能原地复现。</p>
+      </div>
+      <div class="card reveal">
+        <span class="tag">TESTGEN · 官方样例 → JUnit</span>
+        <h3>确定性转换，不经过模型</h3>
+        <p><span class="mono" style="font-size:12.5px">new</span> 时用题目的 metaData + jsonExampleTestcases 生成测试；期望输出<strong>按输入值配对</strong>，不按序号。设计题按操作序列生成，题目说「顺序不重要」时自动按无序比较。</p>
+        <p>签名先对账：对不上或遇到不认识的类型，直接不生成并说明「这类题先手写测试」——宁可少一个测试文件，也不写一个编译不过的。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EVAL -->
+<section id="eval">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">09 / 评测</p>
+        <h2>「感觉提示还行」<br>不算证据</h2>
+        <p class="sec-desc">同一道题、同一段卡住代码、同一份真实失败输出，对比三种架构：现在这套阶梯、朴素单次调用、先诊断再引导（旧项目那套）。判官看不到架构名。</p>
+      </div>
+      <div class="sec-index">09</div>
+    </div>
+
+    <div class="eval-grid">
+      <div class="reveal">
+        <div class="bars">
+          <div class="bar-row">
+            <div class="lab"><span>超长率 · 阶梯（现在）</span><b>16%</b></div>
+            <div class="track"><div class="fill" style="width:16%"></div></div>
+            <div class="sub">140 次输出里 22 次超出档位上限 20%</div>
+          </div>
+          <div class="bar-row">
+            <div class="lab"><span>超长率 · 朴素单次</span><b>77%</b></div>
+            <div class="track"><div class="fill warn" style="width:77%"></div></div>
+            <div class="sub">内容不差，但不守篇幅</div>
+          </div>
+          <div class="bar-row">
+            <div class="lab"><span>超长率 · 诊断 + 引导</span><b>68%</b></div>
+            <div class="track"><div class="fill bad" style="width:68%"></div></div>
+            <div class="sub">多一次转述，时延也翻倍</div>
+          </div>
+        </div>
+
+        <div class="metric-list">
+          <div class="metric"><div class="v">0%</div><div class="l">泄底率（L1–L4 出现可编译 Java）</div></div>
+          <div class="metric"><div class="v">0%</div><div class="l">重复率（3-gram ≥ 0.35）</div></div>
+          <div class="metric"><div class="v">91%</div><div class="l">可行动率</div></div>
+          <div class="metric"><div class="v">20<small>/20</small></div><div class="l">L5 题解跑绿</div></div>
+        </div>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table class="eval-table">
+          <thead>
+            <tr><th>指标（20 题 × 5 档）</th><th>阶梯</th><th>朴素</th><th>诊断+引导</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>泄底率</td><td class="best">0%</td><td>0%</td><td>0%</td></tr>
+            <tr><td>重复率</td><td class="best">0%</td><td>0%</td><td>0%</td></tr>
+            <tr><td>超长率</td><td class="best">16%</td><td>77%</td><td>68%</td></tr>
+            <tr><td>可行动率</td><td>91%</td><td>86%</td><td class="best">92%</td></tr>
+            <tr><td>平均分（判官 1–5）</td><td class="best">4.29</td><td>4.27</td><td>4.15</td></tr>
+            <tr><td>L5 跑绿</td><td>20/20</td><td>20/20</td><td>20/20</td></tr>
+            <tr><td>中位时延</td><td>9,587 ms</td><td class="best">9,004 ms</td><td>16,287 ms</td></tr>
+            <tr><td>tokens / 题</td><td>6,590</td><td class="best">6,432</td><td>10,380</td></tr>
+          </tbody>
+        </table>
+        <div style="padding:16px 18px;border-top:1px solid var(--line-soft);color:var(--dim);font-size:12.5px;line-height:1.7">
+          一句话：阶梯的主要收益是<strong style="color:var(--muted)">篇幅纪律</strong>（16% vs 77% / 68%）；泄底、L5、主观分都到顶，区分不出来。数据与局限见 <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/eval/RESULTS.md" target="_blank" rel="noopener">eval/RESULTS.md</a>。
+        </div>
+      </div>
+    </div>
+
+    <div class="callout reveal">
+      <strong>这组数能证明什么、不能证明什么：</strong>在「每档要求已经写清楚」的前提下，单次调用已经很强，阶梯赢在「不越档、不写小作文」；20 题、每档 1 次采样只够看趋势，判官与被测模型同源会偏爱同一种文风。想复现：<span class="mono" style="font-size:13px;color:var(--amber)">bin/dojo eval --cases 3</span> 试水，去掉参数跑全量。
+    </div>
+  </div>
+</section>
+
+<!-- ARCH -->
+<section id="arch">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">10 / 架构</p>
+        <h2>单 jar，<br>零运行时依赖</h2>
+        <p class="sec-desc">33 个类，约 7.7k 行；18 个测试类 / 118 个 @Test。选 Maven 是因为 dojo test 跑的必须就是 JUnit——IDEA 里点绿箭头和命令行跑的是同一套东西。</p>
+      </div>
+      <div class="sec-index">10</div>
+    </div>
+
+    <div class="arch-grid">
+      <div class="ascii reveal"><span class="g">dojo</span>（单 jar · Java 21 · 零运行时依赖）
+├── <span class="g">Main</span> ── Naming / Repo / Ui（分发、定位、输出）
+├── <span class="g">new</span> ─── LeetCode GraphQL → Problem → Scaffold → TestGen
+│                          └── Html → Markdown（公式/图片/代码块）
+├── <span class="g">hint</span> ── Ladder → Ai → Http → 你的网关
+│             └── hints.md（档位就是历史，可手改）
+├── <span class="g">test</span> ── Mvn → solutions 模块（JUnit 5）
+│             └── last-test.log（下一次 hint 的输入）
+└── <span class="g">clean</span> ─ 系统回收站（题目）/ target（构建产物）
+
+<span class="d">tool/          命令行工具（33 个类，约 7.7k 行）
+solutions/     普通 Maven 模块：解法 + 测试 + kit
+problems/      题面 / 提示记录 / 完成标记（gitignore）</span></div>
+
+      <div class="qa reveal">
+        <div class="qa-item">
+          <div class="n">01</div>
+          <h4>官方样例不是「让模型写测试」</h4>
+          <p>TestGen 只吃 metaData + jsonExampleTestcases，期望输出按输入值配对；签名对不上就整个不生成。</p>
+          <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/tool/src/main/java/dojo/TestGen.java" target="_blank" rel="noopener">TestGen.java ↗</a>
+        </div>
+        <div class="qa-item">
+          <div class="n">02</div>
+          <h4>提示协议是一段能打印的文本</h4>
+          <p>五档的「给 / 不给 / 篇幅」全在 Ladder.SYSTEM；<span class="mono" style="font-size:12.5px">dojo prompt 3</span> 原样打印请求，不发请求。调提示不用读源码。</p>
+          <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/tool/src/main/java/dojo/Ladder.java" target="_blank" rel="noopener">Ladder.java ↗</a>
+        </div>
+        <div class="qa-item">
+          <div class="n">03</div>
+          <h4>评测把「感觉」拆成可复算的指标</h4>
+          <p>三条 arm 每档看到的题面、卡住代码、失败输出、已给提示、提问句逐字相同；判官看不到 arm 名字。</p>
+          <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/eval/README.md" target="_blank" rel="noopener">eval/README.md ↗</a>
+        </div>
+        <div class="qa-item">
+          <div class="n">04</div>
+          <h4>状态是纯文本，不是数据库</h4>
+          <p>数 hints.md 里的 <span class="mono" style="font-size:12.5px">## L3 · …</span> 小节就知道档位；删一节退回一档，手改也认。可 grep、可 git、可同步。</p>
+          <a href="#ladder">回到五档阶梯</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LIMITS -->
+<section id="limits">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <p class="sec-kicker">11 / 取舍与边界</p>
+        <h2>刻意不做的事，<br>和不打算假装的事</h2>
+        <p class="sec-desc">没有 Web 面板、没有数据库、没有星级打卡。代价写在右边，什么时候会疼也写清楚。</p>
+      </div>
+      <div class="sec-index">11</div>
+    </div>
+
+    <div class="limit-grid">
+      <div class="table-wrap reveal">
+        <table class="tradeoff">
+          <thead><tr><th>不做</th><th>为什么</th><th>代价</th></tr></thead>
+          <tbody>
+            <tr><td>Web 页面 / 桌面面板</td><td>题面、代码、测试输出都在磁盘上，命令行是最近的路</td><td>想给别人演示只能投终端</td></tr>
+            <tr><td>数据库</td><td>hints.md + done 就是全部状态；纯文本可 grep、可手改</td><td>换机器或多人共用要自己同步</td></tr>
+            <tr><td>星级 / 打卡 / 排行榜</td><td>和「卡住时能不能往前走」无关</td><td>没有连续天数，坚持全靠自己</td></tr>
+            <tr><td>内置题库镜像</td><td>new 现拉，题面永远是最新的</td><td>leetcode.cn 不可用时拉不到新题</td></tr>
+            <tr><td>Web 端提交判题</td><td>IDEA 里的 JUnit 是更快、更细的反馈</td><td>JUnit 绿 ≠ 站点 AC</td></tr>
+            <tr><td>流式输出</td><td>提示本来就短；一次拿全，重试逻辑才简单</td><td>L5 可能要等十几秒</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="reveal">
+        <ul class="limit-list">
+          <li>只支持 <b>Java</b>。接口没给 Java 模板（SQL / Shell 题）会直接报错跳过。</li>
+          <li>只从 <b>leetcode.cn</b> 拉题，英文站字段不同，未适配。</li>
+          <li>一道题编译不过会挡住整个模块的 <b>dojo test</b>；报错会点出是哪道题，并给出 <span class="mono" style="font-size:12.5px;color:var(--amber)">dojo clean &lt;题号&gt;</span>。</li>
+          <li>生成器遇到 <b>Node 形状入参、ListNode[]、多返回值</b> 会跳过而不是猜。</li>
+          <li><b>stress</b> 只覆盖「返回值可比较」的题；设计题、返回 void、List 的题会明说暂不支持。</li>
+          <li>提示质量取决于网关背后的模型；同一个 SYSTEM，不同模型的「教练感」差别很大。</li>
+          <li>评测集只有 20 题、每档一次采样，<b>只看趋势</b>；判官与被测模型同源时可能偏爱同一种文风。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="big">卡住不是失败，<br><span>卡住是提示该升级了。</span></p>
+    <p class="sub">个人项目 · MIT · 不承诺时间，只列已经知道要补的</p>
+    <div class="flinks">
+      <a href="https://github.com/LiXiaoyao2/leetcode-dojo" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/README.md" target="_blank" rel="noopener">README</a>
+      <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/docs/idea.md" target="_blank" rel="noopener">IDEA 配置</a>
+      <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/eval/RESULTS.md" target="_blank" rel="noopener">评测结果</a>
+      <a href="https://github.com/LiXiaoyao2/leetcode-dojo/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+    <div class="copyright">dojo · Java 21 + Maven · 零运行时依赖 · © 2026</div>
+  </div>
+</footer>
+
+<div class="lb" id="lightbox" aria-hidden="true" role="dialog" aria-label="查看截图">
+  <button class="close" type="button">ESC / 点击关闭</button>
+  <img alt="">
+</div>
+<div class="toast" id="toast">已复制</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---- ladder data ---- */
+  var levels = {
+    1: {
+      code: "LEVEL 1 / 5", name: "澄清",
+      role: "1–2 个能一句话回答的问题：边界、返回约定、你的代码与题面的偏差。",
+      sample: "你说 put(1, 1) 之后 get(1) 拿到了 -1。\n先别管淘汰策略——你的 put 是在 get 之前\n就动了链表，还是在之后？",
+      give: "只给问题，不给方向暗示。",
+      limit: "≤ 120 字 · 禁止出现任何方向暗示"
+    },
+    2: {
+      code: "LEVEL 2 / 5", name: "方向",
+      role: "点名模式（双指针 / 单调栈 / 并查集…），解释它为什么适配这组输入的形状。",
+      sample: "这组输入要你「边扫边记住见过什么」，\n而且查的东西和扫过的东西同构。\n哈希表能把这个「回头找」压成 O(1)，\n单调栈解决不了无序的配对。",
+      give: "给模式名，以及它为什么适配。",
+      limit: "≤ 150 字 · 不给具体步骤"
+    },
+    3: {
+      code: "LEVEL 3 / 5", name: "洞察",
+      role: "打破僵局的那一个观察，可点名变量与行号。",
+      sample: "看 Solution.java:14 的循环：你在把 nums[i] 放进表之后\n才查 need。这意味着 target 是当前值两倍时，\n你查到的是刚插进去的自己。\n查和存的顺序换一下，[3,3] 自己就解决了。",
+      give: "一个能立刻动手的观察。",
+      limit: "≤ 220 字 · 不给步骤清单"
+    },
+    4: {
+      code: "LEVEL 4 / 5", name: "骨架",
+      role: "3–6 步 + 复杂度 + 最易错点；伪代码可以。",
+      sample: "1. 准备一个映射：值 → 下标。\n2. 从左往右扫，先算 need = target - nums[i]。\n3. 拿 need 去映射里查，查到就直接返回两个下标。\n4. 没查到，把 nums[i] 和 i 存进去，再往后走。\n\n目标复杂度：时间 O(n)，空间 O(n)。\n最易错点：必须先查后存。",
+      give: "步骤骨架、复杂度、最易错点；伪代码可以。",
+      limit: "≤ 350 字 · 禁止可编译的 Java"
+    },
+    5: {
+      code: "LEVEL 5 / 5", name: "题解",
+      role: "完整 Java + 思路 + 正确性 + 复杂度 + 一个变体。",
+      sample: "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        Map<Integer,Integer> seen = new HashMap<>();\n        for (int i = 0; i < nums.length; i++) {\n            int need = target - nums[i];\n            if (seen.containsKey(need))\n                return new int[]{seen.get(need), i};\n            seen.put(nums[i], i);\n        }\n        return new int[0];\n    }\n}\n\n思路 / 正确性 / 复杂度 / 一个变体：……",
+      give: "完整题解，包括一个变体。",
+      limit: "篇幅不限 · 默认永远只推进到这一档"
+    }
+  };
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll("[role=tab]"));
+  var panel = document.getElementById("ladder-panel");
+  function selectLevel(n, focus){
+    var d = levels[n];
+    if(!d) return;
+    tabs.forEach(function(t){
+      var on = Number(t.dataset.level) === n;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      if(on && focus) t.focus();
+    });
+    document.getElementById("lv-code").textContent = d.code;
+    document.getElementById("lv-name").textContent = d.name;
+    document.getElementById("lv-role").textContent = d.role;
+    document.getElementById("lv-sample").textContent = d.sample;
+    document.getElementById("lv-give").textContent = d.give;
+    document.getElementById("lv-limit").textContent = d.limit;
+    panel.setAttribute("aria-labelledby", "tab-l" + n);
+  }
+  tabs.forEach(function(t){
+    t.addEventListener("click", function(){ selectLevel(Number(t.dataset.level)); });
+    t.addEventListener("keydown", function(e){
+      var i = tabs.indexOf(t), next = -1;
+      if(e.key === "ArrowRight") next = (i + 1) % tabs.length;
+      if(e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+      if(e.key === "Home") next = 0;
+      if(e.key === "End") next = tabs.length - 1;
+      if(next >= 0){ e.preventDefault(); selectLevel(Number(tabs[next].dataset.level), true); }
+    });
+  });
+
+  /* ---- copy ---- */
+  var toast = document.getElementById("toast");
+  var toastTimer;
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toast.classList.remove("on"); }, 1600);
+  }
+  function copyText(text, label){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ showToast(label || "已复制"); })
+        .catch(function(){ fallback(text, label); });
+    } else { fallback(text, label); }
+  }
+  function fallback(text, label){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); showToast(label || "已复制"); }
+    catch(e){ showToast("复制失败，请手动选择"); }
+    document.body.removeChild(ta);
+  }
+  document.querySelectorAll("[data-copy]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var el = document.getElementById(btn.dataset.copy);
+      if(el) copyText(el.innerText, "已复制安装命令");
+    });
+  });
+
+  /* ---- lightbox ---- */
+  var lb = document.getElementById("lightbox");
+  var lbImg = lb.querySelector("img");
+  document.querySelectorAll(".shot").forEach(function(fig){
+    fig.addEventListener("click", function(){
+      var img = fig.querySelector("img");
+      lbImg.src = img.src;
+      lbImg.alt = img.alt;
+      lb.classList.add("open");
+      lb.setAttribute("aria-hidden", "false");
+    });
+  });
+  function closeLb(){
+    lb.classList.remove("open");
+    lb.setAttribute("aria-hidden", "true");
+    lbImg.removeAttribute("src");
+  }
+  lb.addEventListener("click", closeLb);
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && lb.classList.contains("open")) closeLb();
+  });
+
+  /* ---- reveal on scroll ---- */
+  var reveals = document.querySelectorAll(".reveal");
+  if("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          en.target.classList.add("on");
+          io.unobserve(en.target);
+        }
+      });
+    }, {rootMargin: "0px 0px -8% 0px", threshold: 0.08});
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add("on"); });
+  }
+})();
+</script>
+</body>
+</html>
