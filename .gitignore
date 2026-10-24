@@ -7,6 +7,9 @@ target/
 .dojo/
 problems/*/done
 
+# Claude Code 的本机配置（权限规则因机器而异）
+.claude/settings.local.json
+
 # 本地刷题内容：题面、你的解法、生成的测试都留在自己机器上
 problems/*
 !problems/.gitkeep

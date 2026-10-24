@@ -204,7 +204,11 @@ final class Eval {
 
     private static String commit(Repo repo) {
         try {
-            Process process = new ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+            java.nio.file.Path git = Platform.findExecutable("git");
+            if (git == null) {
+                return "?";
+            }
+            Process process = new ProcessBuilder(git.toString(), "rev-parse", "--short", "HEAD")
                     .directory(repo.root().toFile()).redirectErrorStream(true).start();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
             process.waitFor();

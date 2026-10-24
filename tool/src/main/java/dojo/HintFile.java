@@ -64,12 +64,8 @@ public final class HintFile {
         if ("0".equals(System.getenv("DOJO_OPEN"))) {
             return false;
         }
-        for (List<String> command : List.of(
-                List.of("idea", file.toString()),
-                List.of("idea.sh", file.toString()),
-                List.of("xdg-open", file.toString()))) {
-            String exe = command.get(0);
-            if (which(exe) == null) {
+        for (List<String> command : openCommands(file)) {
+            if (Platform.findExecutable(command.get(0)) == null) {
                 continue;
             }
             try {
@@ -88,20 +84,17 @@ public final class HintFile {
         return false;
     }
 
-    private static String which(String exe) {
-        String path = System.getenv("PATH");
-        if (path == null) {
-            return null;
+    /** 打开文件的候选命令：IDEA CLI 优先，其次系统默认程序。 */
+    private static List<List<String>> openCommands(Path file) {
+        if (Platform.isWindows()) {
+            return List.of(
+                    List.of("idea64", file.toString()),
+                    List.of("idea", file.toString()),
+                    List.of("cmd", "/c", "start", "", file.toString()));
         }
-        for (String dir : path.split(java.io.File.pathSeparator)) {
-            if (dir.isBlank()) {
-                continue;
-            }
-            Path candidate = Path.of(dir, exe);
-            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
-                return candidate.toString();
-            }
-        }
-        return null;
+        return List.of(
+                List.of("idea", file.toString()),
+                List.of("idea.sh", file.toString()),
+                List.of("xdg-open", file.toString()));
     }
 }

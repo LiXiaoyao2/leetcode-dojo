@@ -69,30 +69,73 @@ public final class Clean {
         return paths;
     }
 
-    /** 走系统回收站：优先 mavis-trash，其次 gio，再其次 trash-put。 */
+    /** 走系统回收站：Windows 用 PowerShell，Unix 优先 mavis-trash，其次 gio，再其次 trash-put。 */
     static void trashPaths(List<Path> paths) {
         List<Path> unique = new ArrayList<>(new java.util.LinkedHashSet<>(paths));
-        List<String> command = trashCommand();
+        List<String> command;
+        Path script = null;
+        if (Platform.isWindows()) {
+            script = writeWindowsTrashScript();
+            command = List.of("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", script.toString());
+        } else {
+            command = trashCommand();
+        }
         List<String> argv = new ArrayList<>(command);
         for (Path path : unique) {
             argv.add(path.toString());
         }
-        ProcessBuilder builder = new ProcessBuilder(argv).redirectErrorStream(true);
         try {
-            Process process = builder.start();
-            String output = new String(process.getInputStream().readAllBytes()).strip();
-            int exit = process.waitFor();
-            // mavis-trash 偶尔搬完还退 1（对重复/已消失的路径报错），以最终结果为准。
-            boolean allGone = unique.stream().noneMatch(Files::exists);
-            if (exit != 0 && !allGone) {
-                throw new DojoException("移入回收站失败（" + command.get(0) + " 退出码 " + exit + "）"
-                        + (output.isEmpty() ? "。" : "：" + output));
+            ProcessBuilder builder = new ProcessBuilder(argv).redirectErrorStream(true);
+            try {
+                Process process = builder.start();
+                String output = new String(process.getInputStream().readAllBytes()).strip();
+                int exit = process.waitFor();
+                // mavis-trash 偶尔搬完还退 1（对重复/已消失的路径报错），以最终结果为准。
+                boolean allGone = unique.stream().noneMatch(Files::exists);
+                if (exit != 0 && !allGone) {
+                    throw new DojoException("移入回收站失败（" + command.get(0) + " 退出码 " + exit + "）"
+                            + (output.isEmpty() ? "。" : "：" + output));
+                }
+            } catch (IOException e) {
+                throw new DojoException("启动不了 " + command.get(0) + "：" + e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new DojoException("移入回收站被中断。");
             }
+        } finally {
+            if (script != null) {
+                try {
+                    Files.deleteIfExists(script);
+                } catch (IOException ignored) {
+                    // 临时脚本删不掉不影响结果
+                }
+            }
+        }
+    }
+
+    /** Windows 没有 trash-cli，用 VisualBasic 的 API 把文件送进回收站。 */
+    private static Path writeWindowsTrashScript() {
+        String body = """
+                param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Paths)
+                Add-Type -AssemblyName Microsoft.VisualBasic
+                foreach ($p in $Paths) {
+                    if (Test-Path -LiteralPath $p) {
+                        $item = Get-Item -LiteralPath $p
+                        if ($item.PSIsContainer) {
+                            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                        } else {
+                            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                        }
+                    }
+                }
+                """;
+        try {
+            Path script = Files.createTempFile("dojo-trash", ".ps1");
+            Files.writeString(script, body, java.nio.charset.StandardCharsets.UTF_8);
+            return script;
         } catch (IOException e) {
-            throw new DojoException("启动不了 " + command.get(0) + "：" + e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new DojoException("移入回收站被中断。");
+            throw new DojoException("写回收站脚本失败：" + e.getMessage());
         }
     }
 
@@ -109,20 +152,7 @@ public final class Clean {
 
     /** PATH 里找可执行文件；找不到返回 null。 */
     static Path findExecutable(String name) {
-        String path = System.getenv("PATH");
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        for (String entry : path.split(java.io.File.pathSeparator)) {
-            if (entry.isBlank()) {
-                continue;
-            }
-            Path candidate = Paths.get(entry).resolve(name);
-            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
-                return candidate;
-            }
-        }
-        return null;
+        return Platform.findExecutable(name);
     }
 
     public static String human(long bytes) {

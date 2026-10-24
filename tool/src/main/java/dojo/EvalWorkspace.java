@@ -134,7 +134,7 @@ final class EvalWorkspace {
     }
 
     Run runTests() {
-        return exec(List.of("mvn", "-B", "-ntp", "test", "-Dtest=" + evalCase.testClass(),
+        return exec(List.of(Platform.mvnCommand(), "-B", "-ntp", "test", "-Dtest=" + evalCase.testClass(),
                 "-DfailIfNoTests=false"));
     }
 
@@ -171,7 +171,7 @@ final class EvalWorkspace {
                 process.destroyForcibly();
                 return new Run(124, "评测工程超时（300 s）", millis);
             }
-            String output = Files.readString(log, StandardCharsets.UTF_8);
+            String output = Platform.readText(log);
             return new Run(process.exitValue(), output, millis);
         } catch (IOException e) {
             return new Run(127, "跑不了 mvn：" + e.getMessage(), 0);

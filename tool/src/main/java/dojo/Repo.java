@@ -184,12 +184,22 @@ public final class Repo {
         try (Stream<Path> stream = Files.walk(base, 4)) {
             Optional<Path> newest = stream
                     .filter(path -> path.toString().endsWith(".java"))
-                    .filter(path -> !path.toString().contains("/kit/"))
+                    .filter(path -> !isKit(path))
                     .max(Comparator.comparing(path -> lastModified(path)));
             return newest.flatMap(path -> pathToId(path.getParent()));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** kit 里是共用工具类，不是某道题的解法；分隔符要跟平台走。 */
+    private static boolean isKit(Path path) {
+        for (Path part : path) {
+            if ("kit".equals(part.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static FileTime lastModified(Path path) {

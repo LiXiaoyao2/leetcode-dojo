@@ -724,12 +724,9 @@ public final class Main {
      * 只清带标记的，手写的测试一个不碰。
      */
     private static List<Path> quarantineGeneratedTests(Repo repo, String output) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("(?:^|\\s)(/[^\\s:]*?\\.java)(?=:\\[)").matcher(output);
         List<Path> doomed = new ArrayList<>();
         String generatedDir = repo.solutionsDir().resolve("src/test/java").toString() + java.io.File.separator;
-        while (matcher.find()) {
-            Path file = Path.of(matcher.group(1));
+        for (Path file : Mvn.javaFilesIn(output)) {
             if (!file.startsWith(generatedDir) || !Files.isRegularFile(file)) {
                 continue;
             }
@@ -889,29 +886,22 @@ public final class Main {
 
     /** 在 PATH 里找可执行的 dojo；找不到返回 null。 */
     private static String dojoOnPath() {
-        String path = System.getenv("PATH");
-        if (path == null) {
-            return null;
-        }
-        for (String dir : path.split(java.io.File.pathSeparator)) {
-            if (dir.isBlank()) {
-                continue;
-            }
-            java.nio.file.Path candidate = java.nio.file.Path.of(dir, "dojo");
-            if (java.nio.file.Files.isExecutable(candidate)) {
-                return candidate.toString();
-            }
-        }
-        return null;
+        java.nio.file.Path candidate = Platform.findExecutable("dojo");
+        return candidate == null ? null : candidate.toString();
     }
 
     private static boolean pointsHere(String onPath, Repo repo) {
         try {
             return java.nio.file.Path.of(onPath).toRealPath()
-                    .equals(repo.root().resolve("bin/dojo").toRealPath());
+                    .equals(repo.root().resolve(launcherName()).toRealPath());
         } catch (java.io.IOException e) {
             return false;
         }
+    }
+
+    /** 本仓库的启动器文件名：Unix 是 bin/dojo，Windows 是 bin/dojo.cmd。 */
+    private static String launcherName() {
+        return Platform.isWindows() ? "bin/dojo.cmd" : "bin/dojo";
     }
 
     private static int doctor() {
@@ -922,11 +912,15 @@ public final class Main {
         String onPath = dojoOnPath();
         if (onPath == null) {
             System.out.println("dojo    不在 PATH 上——在别的目录里敲 dojo 会找不到命令");
-            Ui.info("挂上：ln -s " + repo.root().resolve("bin/dojo") + " ~/.local/bin/dojo");
+            if (Platform.isWindows()) {
+                Ui.info("挂上：把 " + repo.root().resolve("bin") + " 加进 PATH");
+            } else {
+                Ui.info("挂上：ln -s " + repo.root().resolve("bin/dojo") + " ~/.local/bin/dojo");
+            }
         } else {
             System.out.println("dojo    " + onPath + (pointsHere(onPath, repo) ? "（指向本仓库）" : "（不是本仓库的 bin/dojo）"));
         }
-        System.out.println("本仓库   " + repo.root().resolve("bin/dojo"));
+        System.out.println("本仓库   " + repo.root().resolve(launcherName()));
         System.out.println();
         System.out.println("配置来源（按优先级，取第一个有 base URL 的）");
         for (String line : Config.sourcesForDoctor(repo)) {
@@ -968,13 +962,11 @@ public final class Main {
      * 怎么清掉——否则用户会以为当前这道题坏了。
      */
     private static void foreignCompileFailures(Repo repo, String currentId, String output) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("(?:^|\\s)/[^\\s:]*?\\.java(?=:\\[)").matcher(output);
         java.util.LinkedHashMap<String, String> problems = new java.util.LinkedHashMap<>();
-        while (matcher.find()) {
-            String file = matcher.group().strip();
+        for (Path path : Mvn.javaFilesIn(output)) {
+            String file = path.toString();
             try {
-                String id = repo.pathToId(Path.of(file)).orElse(null);
+                String id = repo.pathToId(path).orElse(null);
                 if (id != null && !id.equals(currentId)) {
                     problems.putIfAbsent(id, file);
                 }
@@ -1006,11 +998,9 @@ public final class Main {
 
     /** 上次测试日志里的编译错误属于哪道题（不是当前题才返回）；找不到返回 null。 */
     private static String foreignErrorOwner(Repo repo, String currentId, String output) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("(?:^|\\s)(/[^\\s:]*?\\.java)(?=:\\[)").matcher(output);
-        while (matcher.find()) {
+        for (Path path : Mvn.javaFilesIn(output)) {
             try {
-                String id = repo.pathToId(Path.of(matcher.group(1))).orElse(null);
+                String id = repo.pathToId(path).orElse(null);
                 if (id != null && !id.equals(currentId)) {
                     return id;
                 }
@@ -1030,7 +1020,7 @@ public final class Main {
 
     private static String mvnVersion() {
         try {
-            Process process = new ProcessBuilder("mvn", "-v").redirectErrorStream(true).start();
+            Process process = new ProcessBuilder(Platform.mvnCommand(), "-v").redirectErrorStream(true).start();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (!process.waitFor(20, TimeUnit.SECONDS)) {
                 process.destroyForcibly();

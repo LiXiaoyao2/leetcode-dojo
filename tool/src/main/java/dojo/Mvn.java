@@ -34,7 +34,7 @@ public final class Mvn {
     }
 
     private static Result run(Path root, List<String> args, int timeoutSeconds) {
-        List<String> command = new ArrayList<>(List.of("mvn", "-B", "-ntp", "-pl", "solutions"));
+        List<String> command = new ArrayList<>(List.of(Platform.mvnCommand(), "-B", "-ntp", "-pl", "solutions"));
         command.addAll(args);
         long start = System.currentTimeMillis();
         Path log = null;
@@ -50,7 +50,7 @@ public final class Mvn {
                 process.destroyForcibly();
                 return new Result(124, "mvn 超时（" + timeoutSeconds + " 秒），已终止。", timeoutSeconds * 1000L, true);
             }
-            String output = Files.readString(log, StandardCharsets.UTF_8);
+            String output = Platform.readText(log);
             return new Result(process.exitValue(), output, System.currentTimeMillis() - start, true);
         } catch (IOException e) {
             return new Result(127, "找不到 mvn 或启动失败：" + e.getMessage(), 0, false);
@@ -72,6 +72,30 @@ public final class Mvn {
             "Please refer to", "-> [Help", "Re-run Maven", "For more information",
             "Failed to execute goal", "dumpstream", "surefire-reports", "Help 1",
             "To see the full stack trace");
+
+    /**
+     * Maven 报错里的 .java 路径。
+     *
+     * <p>Linux 上是 {@code /home/u/p/Solution.java:[1,1]}，Windows 上是
+     * {@code /d:/code/p/Solution.java:[1,1]}——盘符前面多一个斜杠，且路径里有冒号。
+     * 原来的写法 {@code /[^\s:]*?\.java} 遇到冒号就断了，Windows 上一个都匹配不到。
+     */
+    private static final java.util.regex.Pattern JAVA_FILE = java.util.regex.Pattern
+            .compile("(?:^|\\s)((?:/[A-Za-z]:)?/[^\\s]*?\\.java)(?=:\\s*\\[)");
+
+    /** 把 Maven 输出里提到的 .java 文件按出现顺序找出来。 */
+    public static List<Path> javaFilesIn(String output) {
+        List<Path> files = new ArrayList<>();
+        java.util.regex.Matcher matcher = JAVA_FILE.matcher(output);
+        while (matcher.find()) {
+            try {
+                files.add(Platform.toPath(matcher.group(1)));
+            } catch (RuntimeException ignored) {
+                // 不是路径，跳过
+            }
+        }
+        return files;
+    }
 
     /** 只保留能看懂的部分：失败摘要、断言差异、编译错误；Maven 的套话一律丢掉。 */
     public static String summarize(Result result) {

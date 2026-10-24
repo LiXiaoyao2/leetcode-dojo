@@ -77,7 +77,9 @@ class CleanTest {
 
     @Test
     void findsExecutablesOnPath() {
-        assertTrue(Clean.findExecutable("sh") != null);
+        // 每个平台都保证存在的那个 shell：Unix 是 sh，Windows 是 cmd.exe
+        String shell = Platform.isWindows() ? "cmd" : "sh";
+        assertTrue(Clean.findExecutable(shell) != null);
         assertNull(Clean.findExecutable("dojo-definitely-not-installed"));
     }
 
